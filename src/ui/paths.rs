@@ -150,7 +150,7 @@ impl SvgPath {
         points
     }
 
-    pub fn to_string(&self) -> String {
+    pub fn to_svg_string(&self) -> String {
         let mut out = String::new();
         for command in &self.commands {
             match *command {
@@ -224,12 +224,14 @@ pub fn parse_svg_path(input: &str) -> SvgPath {
 
     while let Some(ch) = chars.next() {
         if ch.is_ascii_alphabetic() {
-            if current_command != ch
-                || matches!(current_command, 'M' | 'm' | 'L' | 'l' | 'C' | 'c' | 'Q' | 'q')
+            if (current_command != ch
+                || matches!(
+                    current_command,
+                    'M' | 'm' | 'L' | 'l' | 'C' | 'c' | 'Q' | 'q'
+                ))
+                && !numbers.is_empty()
             {
-                if !numbers.is_empty() {
-                    flush_command(current_command, &mut numbers, &mut commands);
-                }
+                flush_command(current_command, &mut numbers, &mut commands);
             }
             current_command = ch;
             continue;

@@ -1,5 +1,4 @@
-use crate::core::edge::Edge;
-use crate::core::node::Node;
+use crate::core::{edge::Edge, node::Node};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct NodeDimensionChange {
@@ -273,10 +272,8 @@ fn apply_single_node_change<S: Clone>(change: &NodeChange<S>, node: &mut Node<S>
         }
         NodeChange::Dimensions(change) => {
             if let Some(dimensions) = change.dimensions {
-                node.measured = crate::core::node::MeasuredDimensions::new(
-                    dimensions.width,
-                    dimensions.height,
-                );
+                node.measured =
+                    crate::core::node::MeasuredDimensions::new(dimensions.width, dimensions.height);
                 if let Some(set_attributes) = change.set_attributes {
                     if set_attributes.sets_width() {
                         node.width = Some(dimensions.width);
@@ -364,7 +361,7 @@ pub fn get_selection_changes<S: Clone>(
     let mut changes = Vec::new();
     for node in items {
         let will_be_selected = selected_ids.contains(&node.id);
-        if !(node.selected == false && !will_be_selected) && node.selected != will_be_selected {
+        if !(!node.selected && !will_be_selected) && node.selected != will_be_selected {
             changes.push(NodeChange::select(node.id.clone(), will_be_selected));
         }
     }

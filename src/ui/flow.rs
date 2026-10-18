@@ -1,16 +1,23 @@
-use crate::core::edge::Edge;
-use crate::core::geometry::{Rect, XYPosition};
-use crate::core::node::{HandleType, Node};
-use crate::ui::background::BackgroundVariant;
-use crate::ui::pane::{
-    build_render_data, paint_background, paint_connection, paint_edges, paint_nodes,
-    paint_selection,
-};
-use crate::ui::store::{FlowProps, FlowStore};
 use gpui_kit::{
-    canvas, div, App, Bounds, Context, FocusHandle, Focusable, IntoElement, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Render, ScrollDelta, ScrollWheelEvent,
-    InteractiveElement, ParentElement, Styled, Window,
+    App, Bounds, Context, FocusHandle, Focusable, InteractiveElement, IntoElement, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Render, ScrollDelta,
+    ScrollWheelEvent, Styled, Window, canvas, div,
+};
+
+use crate::{
+    core::{
+        edge::Edge,
+        geometry::{Rect, XYPosition},
+        node::{HandleType, Node},
+    },
+    ui::{
+        background::BackgroundVariant,
+        pane::{
+            build_render_data, paint_background, paint_connection, paint_edges, paint_nodes,
+            paint_selection,
+        },
+        store::{FlowProps, FlowStore},
+    },
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -164,11 +171,7 @@ impl Flow {
                 let dx = flow_point.x - center_x;
                 let dy = flow_point.y - center_y;
                 if dx * dx + dy * dy <= radius * radius {
-                    return Some((
-                        node.id.clone(),
-                        handle.handle_type,
-                        handle.id.clone(),
-                    ));
+                    return Some((node.id.clone(), handle.handle_type, handle.id.clone()));
                 }
             }
         }
@@ -303,30 +306,30 @@ impl Flow {
                 self.store.sync_transform();
             }
             DragMode::Connection => {
-                if let Some(line) = self.store.connection_line() {
-                    if line.target_x != line.source_x || line.target_y != line.source_y {
-                        let state = self.store.connection_state().clone();
-                        if let crate::core::connect::ConnectionState::InProgress(in_progress) = state {
-                            if let Some(target) = in_progress.to_node {
-                                let target_handle = in_progress
-                                    .to_handle
-                                    .as_ref()
-                                    .and_then(|handle| handle.id.clone());
-                                let source_handle =
-                                    in_progress.from_handle.id.clone();
-                                let mut edge: Edge<String> =
-                                    Edge::default();
-                                edge.id = format!("{}-{}", in_progress.from_handle.node_id, target.id);
-                                edge.source = in_progress.from_handle.node_id.clone();
-                                edge.target = target.id.clone();
-                                edge.source_handle = source_handle;
-                                edge.target_handle = target_handle;
-                                let mut edges = self.store.edges().to_vec();
-                                edges.push(edge);
-                                self.store.set_edges(edges);
-                                self.store.update_nodes();
-                            }
-                        }
+                if let Some(line) = self.store.connection_line()
+                    && (line.target_x != line.source_x || line.target_y != line.source_y)
+                {
+                    let state = self.store.connection_state().clone();
+                    if let crate::core::connect::ConnectionState::InProgress(in_progress) = state
+                        && let Some(target) = in_progress.to_node
+                    {
+                        let target_handle = in_progress
+                            .to_handle
+                            .as_ref()
+                            .and_then(|handle| handle.id.clone());
+                        let source_handle = in_progress.from_handle.id.clone();
+                        let edge: Edge<String> = Edge {
+                            id: format!("{}-{}", in_progress.from_handle.node_id, target.id),
+                            source: in_progress.from_handle.node_id.clone(),
+                            target: target.id.clone(),
+                            source_handle,
+                            target_handle,
+                            ..Edge::default()
+                        };
+                        let mut edges = self.store.edges().to_vec();
+                        edges.push(edge);
+                        self.store.set_edges(edges);
+                        self.store.update_nodes();
                     }
                 }
                 self.store.cancel_connection();

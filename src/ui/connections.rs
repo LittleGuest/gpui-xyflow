@@ -1,9 +1,15 @@
-use crate::core::connect::{ConnectionLine, ConnectionState};
-use crate::core::edge::{ConnectionLineType, PathOptions};
-use crate::core::geometry::XYPosition;
-use crate::ui::edge_renderer::connection_line_path;
-use crate::ui::paths::{parse_svg_path, SvgPath};
-use crate::ui::theme::FlowTheme;
+use crate::{
+    core::{
+        connect::{ConnectionLine, ConnectionState},
+        edge::{ConnectionLineType, PathOptions},
+        geometry::XYPosition,
+    },
+    ui::{
+        edge_renderer::connection_line_path,
+        paths::{SvgPath, parse_svg_path},
+        theme::FlowTheme,
+    },
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ConnectionVisual {

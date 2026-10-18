@@ -1,5 +1,7 @@
-use crate::core::geometry::{Transform, XYPosition};
-use crate::ui::theme::FlowTheme;
+use crate::{
+    core::geometry::{Transform, XYPosition},
+    ui::theme::FlowTheme,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BackgroundVariant {
@@ -83,19 +85,10 @@ impl BackgroundPattern {
     pub fn scaled_gap(self, transform: Transform) -> f64 {
         let zoom = transform.zoom();
         let gap = self.gap * zoom;
-        if gap < 1.0 {
-            1.0
-        } else {
-            gap
-        }
+        if gap < 1.0 { 1.0 } else { gap }
     }
 
-    pub fn dot_list(
-        self,
-        transform: Transform,
-        width: f64,
-        height: f64,
-    ) -> Vec<(XYPosition, f64)> {
+    pub fn dot_list(self, transform: Transform, width: f64, height: f64) -> Vec<(XYPosition, f64)> {
         let gap = self.scaled_gap(transform);
         if gap <= 0.0 {
             return Vec::new();
@@ -130,18 +123,12 @@ impl BackgroundPattern {
         let mut segments = Vec::new();
         let mut x = transform.x() % gap;
         while x < width + gap {
-            segments.push((
-                XYPosition::new(x, 0.0),
-                XYPosition::new(x, height),
-            ));
+            segments.push((XYPosition::new(x, 0.0), XYPosition::new(x, height)));
             x += gap;
         }
         let mut y = transform.y() % gap;
         while y < height + gap {
-            segments.push((
-                XYPosition::new(0.0, y),
-                XYPosition::new(width, y),
-            ));
+            segments.push((XYPosition::new(0.0, y), XYPosition::new(width, y)));
             y += gap;
         }
         segments

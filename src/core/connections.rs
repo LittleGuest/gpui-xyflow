@@ -1,8 +1,10 @@
 use std::collections::BTreeMap;
 
-use crate::core::edge::{Connection, Edge};
-use crate::core::graph::ConnectionMode;
-use crate::core::node::Handle;
+use crate::core::{
+    edge::{Connection, Edge},
+    graph::ConnectionMode,
+    node::Handle,
+};
 
 pub type ConnectionLookup = BTreeMap<String, Connection>;
 
@@ -72,7 +74,10 @@ pub fn get_edge_id(
     )
 }
 
-pub fn connection_exists<S: Clone>(edge: &crate::core::edge::Edge<S>, edges: &[crate::core::edge::Edge<S>]) -> bool {
+pub fn connection_exists<S: Clone>(
+    edge: &crate::core::edge::Edge<S>,
+    edges: &[crate::core::edge::Edge<S>],
+) -> bool {
     edges.iter().any(|candidate| {
         candidate.source == edge.source
             && candidate.target == edge.target
@@ -104,7 +109,7 @@ pub fn add_edge<S: Clone>(
         if next.edge_type.is_none() {
             next.edge_type = options.edge_type.clone();
         }
-        if next.animated == false {
+        if !next.animated {
             next.animated = options.animated;
         }
         if next.marker_start.is_none() {
@@ -123,4 +128,78 @@ pub fn add_edge<S: Clone>(
     let mut result = edges.to_vec();
     result.push(next);
     Some(result)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReconnectEdgeOptions {
+    pub should_replace_id: bool,
+}
+
+impl Default for ReconnectEdgeOptions {
+    fn default() -> Self {
+        ReconnectEdgeOptions {
+            should_replace_id: true,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ReconnectEdgeError {
+    MissingSourceOrTarget,
+    EdgeNotFound(String),
+}
+
+impl ReconnectEdgeError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            ReconnectEdgeError::MissingSourceOrTarget => "006",
+            ReconnectEdgeError::EdgeNotFound(_) => "007",
+        }
+    }
+
+    pub fn message(&self) -> String {
+        match self {
+            ReconnectEdgeError::MissingSourceOrTarget => crate::core::utils_extra::error_006(),
+            ReconnectEdgeError::EdgeNotFound(id) => crate::core::utils_extra::error_007(id),
+        }
+    }
+}
+
+pub fn reconnect_edge<S: Clone>(
+    old_edge: &Edge<S>,
+    new_connection: &Connection,
+    edges: &[Edge<S>],
+    options: ReconnectEdgeOptions,
+) -> Result<Vec<Edge<S>>, ReconnectEdgeError> {
+    if new_connection.source.is_empty() || new_connection.target.is_empty() {
+        return Err(ReconnectEdgeError::MissingSourceOrTarget);
+    }
+
+    if !edges.iter().any(|edge| edge.id == old_edge.id) {
+        return Err(ReconnectEdgeError::EdgeNotFound(old_edge.id.clone()));
+    }
+
+    let mut next = old_edge.clone();
+    next.id = if options.should_replace_id {
+        get_edge_id(
+            &new_connection.source,
+            new_connection.source_handle.as_deref(),
+            &new_connection.target,
+            new_connection.target_handle.as_deref(),
+        )
+    } else {
+        old_edge.id.clone()
+    };
+    next.source = new_connection.source.clone();
+    next.target = new_connection.target.clone();
+    next.source_handle = new_connection.source_handle.clone();
+    next.target_handle = new_connection.target_handle.clone();
+
+    let mut result: Vec<Edge<S>> = edges
+        .iter()
+        .filter(|edge| edge.id != old_edge.id)
+        .cloned()
+        .collect();
+    result.push(next);
+    Ok(result)
 }

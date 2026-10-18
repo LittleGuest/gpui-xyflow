@@ -1,39 +1,39 @@
-use std::cell::RefCell;
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::{cell::RefCell, collections::BTreeMap, sync::Arc};
 
-use crate::core::change::{apply_edge_changes, apply_node_changes, EdgeChange, NodeChange};
-use crate::core::connect::{
-    check_click_connection, start_connection, update_connection, CheckHandleParams,
-    ConnectionLine, ConnectionResult, ConnectionState, NoConnection, StartConnectionParams,
-    UpdateConnectionParams,
+use crate::{
+    core::{
+        change::{
+            EdgeChange, NodeChange, NodePositionChange, apply_edge_changes, apply_node_changes,
+        },
+        connect::{
+            CheckHandleParams, ConnectionLine, ConnectionResult, ConnectionState, NoConnection,
+            StartConnectionParams, UpdateConnectionParams, check_click_connection,
+            start_connection, update_connection,
+        },
+        constants::{DEFAULT_NODE_ORIGIN, INFINITE_EXTENT},
+        drag::{DragStore, UpdateNodesParams, parent_expansion_rect, update_nodes},
+        edge::{ConnectionLineType, Edge, EdgeGraphics, PathOptions},
+        geometry::{
+            CoordinateExtent, Dimensions, EdgePosition, NodeOrigin, Padding, PanOnScrollMode, Rect,
+            SelectionMode, SnapGrid, Transform, Viewport, XYPosition, ZIndexMode,
+        },
+        graph::{
+            ConnectionMode, EdgePositionParams, get_edge_graphics, get_edge_position,
+            get_elevated_edge_z_index,
+        },
+        node::{HandleType, InternalNode, Node, NodeDragItem, NodeLookup, ParentLookup},
+        panzoom::{
+            PanOnDrag, PanZoom, PanZoomOptions, transform_to_viewport, viewport_to_transform,
+        },
+        store::{
+            AdoptOptions, NodeInternalsUpdate, adopt_user_nodes, handle_expand_parent,
+            update_node_internals,
+        },
+        utils::{box_to_rect, get_rects_overlapping_area, get_viewport_for_bounds, node_to_box},
+        xyminimap::minimap_bounds,
+    },
+    ui::{callbacks::FlowCallbacks, theme::FlowTheme},
 };
-use crate::core::constants::{DEFAULT_NODE_ORIGIN, INFINITE_EXTENT};
-use crate::core::change::{NodePositionChange};
-use crate::core::drag::{
-    parent_expansion_rect, update_nodes, DragStore, UpdateNodesParams,
-};
-use crate::core::edge::{ConnectionLineType, Edge, PathOptions};
-use crate::core::geometry::{
-    CoordinateExtent, Dimensions, EdgePosition, NodeOrigin, PanOnScrollMode, Rect, SelectionMode,
-    SnapGrid, Transform, Viewport, XYPosition, ZIndexMode,
-};
-use crate::core::graph::{
-    get_elevated_edge_z_index, get_edge_graphics, get_edge_position, ConnectionMode,
-    EdgePositionParams,
-};
-use crate::core::edge::EdgeGraphics;
-use crate::core::node::{HandleType, InternalNode, Node, NodeDragItem, NodeLookup, ParentLookup};
-use crate::core::panzoom::{transform_to_viewport, viewport_to_transform, PanOnDrag, PanZoom, PanZoomOptions};
-use crate::core::store::{
-    adopt_user_nodes, handle_expand_parent, update_node_internals, AdoptOptions,
-    NodeInternalsUpdate,
-};
-use crate::core::geometry::Padding;
-use crate::core::utils::{box_to_rect, get_rects_overlapping_area, get_viewport_for_bounds, node_to_box};
-use crate::core::xyminimap::minimap_bounds;
-use crate::ui::callbacks::FlowCallbacks;
-use crate::ui::theme::FlowTheme;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ClickHandle {
@@ -635,7 +635,10 @@ impl<S: Clone + PartialEq> FlowStore<S> {
 
     pub fn resolve_fit_view(&mut self) -> bool {
         let bounds = self.tight_bounds();
-        if bounds.width > 0.0 && bounds.height > 0.0 && self.size.width > 0.0 && self.size.height > 0.0
+        if bounds.width > 0.0
+            && bounds.height > 0.0
+            && self.size.width > 0.0
+            && self.size.height > 0.0
         {
             self.fit_bounds(bounds, self.props.fit_view_padding);
         }
@@ -745,7 +748,10 @@ impl<S: Clone + PartialEq> FlowStore<S> {
     pub fn selection_changes_for_rect(&self, rect: Rect) -> Vec<NodeChange<S>> {
         let mut changes = Vec::new();
         for node in self.node_lookup.values() {
-            let node_rect = box_to_rect(node_to_box(&node.internals.user_node, self.props.node_origin));
+            let node_rect = box_to_rect(node_to_box(
+                &node.internals.user_node,
+                self.props.node_origin,
+            ));
             let overlap = get_rects_overlapping_area(node_rect, rect);
             let is_inside = match self.props.selection_mode {
                 SelectionMode::Full => overlap >= node_rect.width * node_rect.height,
@@ -766,7 +772,12 @@ impl<S: Clone + PartialEq> FlowStore<S> {
         drag.store = DragStore {
             nodes: Vec::new(),
             edges: Vec::new(),
-            node_lookup: self.node_lookup.clone().into_iter().map(|(k, v)| (k, node_to_string_internal(v))).collect(),
+            node_lookup: self
+                .node_lookup
+                .clone()
+                .into_iter()
+                .map(|(k, v)| (k, node_to_string_internal(v)))
+                .collect(),
             node_extent: self.props.node_extent,
             snap_grid: self.props.snap_grid,
             snap_to_grid: self.props.snap_to_grid,
@@ -780,7 +791,8 @@ impl<S: Clone + PartialEq> FlowStore<S> {
         drag.items.clear();
         for node in self.node_lookup.values() {
             if node.selected {
-                drag.items.insert(node.id.clone(), NodeDragItem::from_internal(node, pointer));
+                drag.items
+                    .insert(node.id.clone(), NodeDragItem::from_internal(node, pointer));
             }
         }
     }
@@ -793,7 +805,12 @@ impl<S: Clone + PartialEq> FlowStore<S> {
             let store = DragStore {
                 nodes: Vec::new(),
                 edges: Vec::new(),
-                node_lookup: self.node_lookup.clone().into_iter().map(|(k, v)| (k, node_to_string_internal(v))).collect(),
+                node_lookup: self
+                    .node_lookup
+                    .clone()
+                    .into_iter()
+                    .map(|(k, v)| (k, node_to_string_internal(v)))
+                    .collect(),
                 node_extent: drag.store.node_extent,
                 snap_grid: drag.store.snap_grid,
                 snap_to_grid: drag.store.snap_to_grid,
@@ -804,7 +821,13 @@ impl<S: Clone + PartialEq> FlowStore<S> {
                 auto_pan_speed: drag.store.auto_pan_speed,
                 node_extent_override: drag.store.node_extent_override,
             };
-            let result = update_nodes(UpdateNodesParams { pointer, store: &store }, &mut items);
+            let result = update_nodes(
+                UpdateNodesParams {
+                    pointer,
+                    store: &store,
+                },
+                &mut items,
+            );
             drag.items = items;
             for (id, position) in result.positions {
                 results.push((id, position.position, position.position_absolute));
@@ -1154,7 +1177,9 @@ fn node_to_string_internal<S: Clone>(node: InternalNode<S>) -> InternalNode<Stri
     }
 }
 
-fn node_to_string_internals<S: Clone>(internals: crate::core::node::Internals<S>) -> crate::core::node::Internals<String> {
+fn node_to_string_internals<S: Clone>(
+    internals: crate::core::node::Internals<S>,
+) -> crate::core::node::Internals<String> {
     crate::core::node::Internals {
         position_absolute: internals.position_absolute,
         z: internals.z,

@@ -1,4 +1,4 @@
-use gpui_kit::{px, rgba, rgb, Hsla, Pixels, Rgba};
+use gpui_kit::{Hsla, Pixels, Rgba, px, rgb, rgba};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FlowTheme {

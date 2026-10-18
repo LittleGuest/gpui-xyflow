@@ -1,7 +1,11 @@
-use crate::core::geometry::{PanOnScrollMode, Transform, Viewport};
-use crate::core::panzoom::PanOnDrag;
-use crate::core::xypanzoom::filter::{PointerEvent, PointerEventKind};
-use crate::core::xypanzoom::utils::{is_right_click_pan, is_wrapped_with_class, wheel_delta};
+use crate::core::{
+    geometry::{PanOnScrollMode, Transform, Viewport},
+    panzoom::PanOnDrag,
+    xypanzoom::{
+        filter::{PointerEvent, PointerEventKind},
+        utils::{is_right_click_pan, is_wrapped_with_class, wheel_delta},
+    },
+};
 
 pub const PAN_SCROLL_END_DELAY_MS: f64 = 150.0;
 
@@ -70,7 +74,7 @@ impl ZoomEvent {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct PanScrollResult {
     pub handled: bool,
     pub prevented: bool,
@@ -78,19 +82,6 @@ pub struct PanScrollResult {
     pub scaled_to: Option<f64>,
     pub start: bool,
     pub continued: bool,
-}
-
-impl Default for PanScrollResult {
-    fn default() -> Self {
-        PanScrollResult {
-            handled: false,
-            prevented: false,
-            translated: None,
-            scaled_to: None,
-            start: false,
-            continued: false,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -240,17 +231,9 @@ pub fn create_zoom_on_scroll_handler(
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct PanZoomStartParams {
     pub on_dragging_change: bool,
-}
-
-impl Default for PanZoomStartParams {
-    fn default() -> Self {
-        PanZoomStartParams {
-            on_dragging_change: false,
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -315,8 +298,8 @@ pub fn create_pan_zoom_handler(
     params: &PanZoomParams,
     event: &ZoomEvent,
 ) -> PanZoomResult {
-    values.used_right_mouse_button = params.on_pane_context_menu
-        && is_right_click_pan(&params.pan_on_drag, values.mouse_button);
+    values.used_right_mouse_button =
+        params.on_pane_context_menu && is_right_click_pan(&params.pan_on_drag, values.mouse_button);
 
     PanZoomResult {
         transform: event.transform,

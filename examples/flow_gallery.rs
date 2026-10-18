@@ -1,12 +1,18 @@
 use gpui_kit::*;
-use gpui_xyflow::core::edge::{Edge, EdgeMarker, EdgeMarkerType, MarkerType};
-use gpui_xyflow::core::geometry::{Position, XYPosition};
-use gpui_xyflow::core::node::{Handle, HandleType, Node};
-use gpui_xyflow::ui::background::BackgroundVariant;
-use gpui_xyflow::ui::controls::{ControlButton, ControlsProps};
-use gpui_xyflow::ui::flow::Flow;
-use gpui_xyflow::ui::store::FlowProps;
-use gpui_xyflow::ui::theme::FlowTheme;
+use gpui_xyflow::{
+    core::{
+        edge::{Edge, EdgeMarker, EdgeMarkerType, MarkerType},
+        geometry::{Position, XYPosition},
+        node::{Handle, HandleType, Node},
+    },
+    ui::{
+        background::BackgroundVariant,
+        controls::{ControlButton, ControlsProps},
+        flow::Flow,
+        store::FlowProps,
+        theme::FlowTheme,
+    },
+};
 
 struct Gallery {
     flow: Entity<Flow>,
@@ -147,15 +153,25 @@ fn gallery_nodes(dark: bool) -> Vec<Node<String>> {
         .with_size(150.0, 54.0)
         .with_measured(150.0, 54.0)
         .with_source_position(Position::Bottom);
-    input.handles = vec![handle("input", HandleType::Source, Position::Bottom, 0.5, 1.0)];
+    input.handles = vec![handle(
+        "input",
+        HandleType::Source,
+        Position::Bottom,
+        0.5,
+        1.0,
+    )];
     nodes.push(input);
 
-    let mut bezier = Node::new("bezier", XYPosition::new(320.0, 120.0), "bezier".to_string())
-        .with_type("default")
-        .with_size(160.0, 54.0)
-        .with_measured(160.0, 54.0)
-        .with_source_position(Position::Right)
-        .with_target_position(Position::Left);
+    let mut bezier = Node::new(
+        "bezier",
+        XYPosition::new(320.0, 120.0),
+        "bezier".to_string(),
+    )
+    .with_type("default")
+    .with_size(160.0, 54.0)
+    .with_measured(160.0, 54.0)
+    .with_source_position(Position::Right)
+    .with_target_position(Position::Left);
     bezier.handles = vec![
         handle("bezier", HandleType::Target, Position::Left, 0.0, 0.5),
         handle("bezier", HandleType::Source, Position::Right, 1.0, 0.5),
@@ -174,20 +190,40 @@ fn gallery_nodes(dark: bool) -> Vec<Node<String>> {
     ];
     nodes.push(step);
 
-    let mut smooth = Node::new("smooth", XYPosition::new(600.0, 260.0), "smooth".to_string())
-        .with_type("default")
-        .with_size(170.0, 54.0)
-        .with_measured(170.0, 54.0)
-        .with_target_position(Position::Left);
-    smooth.handles = vec![handle("smooth", HandleType::Target, Position::Left, 0.0, 0.5)];
+    let mut smooth = Node::new(
+        "smooth",
+        XYPosition::new(600.0, 260.0),
+        "smooth".to_string(),
+    )
+    .with_type("default")
+    .with_size(170.0, 54.0)
+    .with_measured(170.0, 54.0)
+    .with_target_position(Position::Left);
+    smooth.handles = vec![handle(
+        "smooth",
+        HandleType::Target,
+        Position::Left,
+        0.0,
+        0.5,
+    )];
     nodes.push(smooth);
 
-    let mut output = Node::new("output", XYPosition::new(600.0, 120.0), "output".to_string())
-        .with_type("output")
-        .with_size(150.0, 54.0)
-        .with_measured(150.0, 54.0)
-        .with_target_position(Position::Left);
-    output.handles = vec![handle("output", HandleType::Target, Position::Left, 0.0, 0.5)];
+    let mut output = Node::new(
+        "output",
+        XYPosition::new(600.0, 120.0),
+        "output".to_string(),
+    )
+    .with_type("output")
+    .with_size(150.0, 54.0)
+    .with_measured(150.0, 54.0)
+    .with_target_position(Position::Left);
+    output.handles = vec![handle(
+        "output",
+        HandleType::Target,
+        Position::Left,
+        0.0,
+        0.5,
+    )];
     nodes.push(output);
 
     let mut group = Node::new("group", XYPosition::new(60.0, 400.0), "group".to_string())
@@ -208,40 +244,50 @@ fn gallery_edges() -> Vec<Edge<String>> {
         )))
     };
 
-    let mut e1 = Edge::default();
-    e1.id = "input-bezier".to_string();
-    e1.source = "input".to_string();
-    e1.target = "bezier".to_string();
-    e1.marker_end = marker();
+    let e1 = Edge {
+        id: "input-bezier".to_string(),
+        source: "input".to_string(),
+        target: "bezier".to_string(),
+        marker_end: marker(),
+        ..Edge::default()
+    };
 
-    let mut e2 = Edge::default();
-    e2.id = "bezier-output".to_string();
-    e2.source = "bezier".to_string();
-    e2.target = "output".to_string();
-    e2.marker_end = marker();
-    e2.label = Some("bezier".to_string());
+    let e2 = Edge {
+        id: "bezier-output".to_string(),
+        source: "bezier".to_string(),
+        target: "output".to_string(),
+        marker_end: marker(),
+        label: Some("bezier".to_string()),
+        ..Edge::default()
+    };
 
-    let mut e3 = Edge::default();
-    e3.id = "bezier-step".to_string();
-    e3.source = "bezier".to_string();
-    e3.target = "step".to_string();
-    e3.edge_type = Some("step".to_string());
-    e3.marker_end = marker();
+    let e3 = Edge {
+        id: "bezier-step".to_string(),
+        source: "bezier".to_string(),
+        target: "step".to_string(),
+        edge_type: Some("step".to_string()),
+        marker_end: marker(),
+        ..Edge::default()
+    };
 
-    let mut e4 = Edge::default();
-    e4.id = "step-smooth".to_string();
-    e4.source = "step".to_string();
-    e4.target = "smooth".to_string();
-    e4.edge_type = Some("smoothstep".to_string());
-    e4.marker_end = marker();
-    e4.label = Some("smoothstep".to_string());
+    let e4 = Edge {
+        id: "step-smooth".to_string(),
+        source: "step".to_string(),
+        target: "smooth".to_string(),
+        edge_type: Some("smoothstep".to_string()),
+        marker_end: marker(),
+        label: Some("smoothstep".to_string()),
+        ..Edge::default()
+    };
 
-    let mut e5 = Edge::default();
-    e5.id = "output-smooth".to_string();
-    e5.source = "output".to_string();
-    e5.target = "smooth".to_string();
-    e5.edge_type = Some("straight".to_string());
-    e5.marker_end = marker();
+    let e5 = Edge {
+        id: "output-smooth".to_string(),
+        source: "output".to_string(),
+        target: "smooth".to_string(),
+        edge_type: Some("straight".to_string()),
+        marker_end: marker(),
+        ..Edge::default()
+    };
 
     vec![e1, e2, e3, e4, e5]
 }

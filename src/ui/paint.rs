@@ -1,5 +1,6 @@
+use gpui_kit::{Path, PathBuilder, Pixels, Point, point, px};
+
 use crate::ui::paths::{PathCommand, SvgPath, SvgPoint};
-use gpui_kit::{point, px, Path, PathBuilder, Pixels, Point};
 
 pub fn to_point(point_value: SvgPoint) -> Point<Pixels> {
     point(px(point_value.x as f32), px(point_value.y as f32))
@@ -59,9 +60,10 @@ pub fn transform_points(path: &SvgPath, transform: crate::core::geometry::Transf
         .map(|command| match command {
             PathCommand::MoveTo(to) => PathCommand::MoveTo(map_point(*to, transform, zoom)),
             PathCommand::LineTo(to) => PathCommand::LineTo(map_point(*to, transform, zoom)),
-            PathCommand::QuadTo(ctrl, to) => {
-                PathCommand::QuadTo(map_point(*ctrl, transform, zoom), map_point(*to, transform, zoom))
-            }
+            PathCommand::QuadTo(ctrl, to) => PathCommand::QuadTo(
+                map_point(*ctrl, transform, zoom),
+                map_point(*to, transform, zoom),
+            ),
             PathCommand::CubicTo(ctrl_a, ctrl_b, to) => PathCommand::CubicTo(
                 map_point(*ctrl_a, transform, zoom),
                 map_point(*ctrl_b, transform, zoom),

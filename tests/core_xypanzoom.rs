@@ -1,16 +1,19 @@
-use gpui_xyflow::core::geometry::{PanOnScrollMode, Rect, Transform, Viewport};
-use gpui_xyflow::core::panzoom::{transition_ease_cubic_in_out, PanOnDrag};
-use gpui_xyflow::core::xypanzoom::eventhandler::{
-    create_pan_on_scroll_handler, create_pan_zoom_end_handler, create_pan_zoom_handler,
-    create_pan_zoom_start_handler, poll_pan_scroll_timeout, PanOnScrollParams, PanScrollTimeoutResult,
-    PanZoomEndParams, PanZoomParams, ZoomEvent, ZoomPanValues, PAN_SCROLL_END_DELAY_MS,
-};
-use gpui_xyflow::core::xypanzoom::filter::{
-    create_filter, FilterOutcome, FilterParams, PointerEvent, PointerEventKind,
-};
-use gpui_xyflow::core::xypanzoom::utils::{
-    default_ease, interpolate_linear, interpolate_zoom, is_right_click_pan, is_wrapped_with_class,
-    minimize_transform, wheel_delta, Ease, ViewportTransition,
+use gpui_xyflow::core::{
+    geometry::{PanOnScrollMode, Rect, Transform, Viewport},
+    panzoom::{PanOnDrag, transition_ease_cubic_in_out},
+    xypanzoom::{
+        eventhandler::{
+            PAN_SCROLL_END_DELAY_MS, PanOnScrollParams, PanScrollTimeoutResult, PanZoomEndParams,
+            PanZoomParams, ZoomEvent, ZoomPanValues, create_pan_on_scroll_handler,
+            create_pan_zoom_end_handler, create_pan_zoom_handler, create_pan_zoom_start_handler,
+            poll_pan_scroll_timeout,
+        },
+        filter::{FilterOutcome, FilterParams, PointerEvent, PointerEventKind, create_filter},
+        utils::{
+            Ease, ViewportTransition, default_ease, interpolate_linear, interpolate_zoom,
+            is_right_click_pan, is_wrapped_with_class, minimize_transform, wheel_delta,
+        },
+    },
 };
 
 fn params() -> FilterParams {
@@ -277,9 +280,7 @@ fn transition_respects_linear_ease() {
     let to = Viewport::new(100.0, 0.0, 1.0);
     let mut transition = ViewportTransition::new(from, to, 100.0)
         .with_ease(Ease::Linear)
-        .with_interpolate(
-            gpui_xyflow::core::xypanzoom::utils::Interpolate::Linear,
-        );
+        .with_interpolate(gpui_xyflow::core::xypanzoom::utils::Interpolate::Linear);
     let mid = transition.advance(50.0);
     assert!((mid.x - 50.0).abs() < 1e-9);
 }
@@ -297,7 +298,11 @@ fn minimize_transform_clamps_into_translate_extent() {
 #[test]
 fn minimize_transform_zero_extent_passthrough() {
     let transform = Transform::new(5.0, 6.0, 1.0);
-    let result = minimize_transform(transform, Rect::new(0.0, 0.0, 1.0, 1.0), Rect::new(0.0, 0.0, 0.0, 0.0));
+    let result = minimize_transform(
+        transform,
+        Rect::new(0.0, 0.0, 1.0, 1.0),
+        Rect::new(0.0, 0.0, 0.0, 0.0),
+    );
     assert_eq!(result, transform);
 }
 
@@ -318,8 +323,10 @@ fn pan_scroll_starts_then_continues() {
 #[test]
 fn pan_scroll_translation_uses_speed_and_zoom() {
     let mut values = ZoomPanValues::default();
-    let mut p = PanOnScrollParams::default();
-    p.pan_on_scroll_speed = 0.5;
+    let p = PanOnScrollParams {
+        pan_on_scroll_speed: 0.5,
+        ..PanOnScrollParams::default()
+    };
     let event = PointerEvent::wheel(-100.0);
     let result = create_pan_on_scroll_handler(&p, &mut values, &event, 2.0, 0.0);
     let (dx, dy) = result.translated.unwrap();
@@ -330,8 +337,10 @@ fn pan_scroll_translation_uses_speed_and_zoom() {
 #[test]
 fn pan_scroll_vertical_mode_zeroes_delta_x() {
     let mut values = ZoomPanValues::default();
-    let mut p = PanOnScrollParams::default();
-    p.pan_on_scroll_mode = PanOnScrollMode::Vertical;
+    let p = PanOnScrollParams {
+        pan_on_scroll_mode: PanOnScrollMode::Vertical,
+        ..PanOnScrollParams::default()
+    };
     let mut event = PointerEvent::wheel(-10.0);
     event.delta_x = 50.0;
     let result = create_pan_on_scroll_handler(&p, &mut values, &event, 1.0, 0.0);
@@ -342,8 +351,10 @@ fn pan_scroll_vertical_mode_zeroes_delta_x() {
 #[test]
 fn pan_scroll_horizontal_mode_zeroes_delta_y() {
     let mut values = ZoomPanValues::default();
-    let mut p = PanOnScrollParams::default();
-    p.pan_on_scroll_mode = PanOnScrollMode::Horizontal;
+    let p = PanOnScrollParams {
+        pan_on_scroll_mode: PanOnScrollMode::Horizontal,
+        ..PanOnScrollParams::default()
+    };
     let result =
         create_pan_on_scroll_handler(&p, &mut values, &PointerEvent::wheel(-10.0), 1.0, 0.0);
     let (_, dy) = result.translated.unwrap();
@@ -376,9 +387,17 @@ fn pan_scroll_timeout_fires_after_delay() {
     let mut values = ZoomPanValues::default();
     let p = PanOnScrollParams::default();
     create_pan_on_scroll_handler(&p, &mut values, &PointerEvent::wheel(-10.0), 1.0, 0.0);
-    let early = poll_pan_scroll_timeout(&mut values, PAN_SCROLL_END_DELAY_MS - 1.0, Viewport::IDENTITY);
+    let early = poll_pan_scroll_timeout(
+        &mut values,
+        PAN_SCROLL_END_DELAY_MS - 1.0,
+        Viewport::IDENTITY,
+    );
     assert_eq!(early, PanScrollTimeoutResult::Idle);
-    let late = poll_pan_scroll_timeout(&mut values, PAN_SCROLL_END_DELAY_MS + 1.0, Viewport::IDENTITY);
+    let late = poll_pan_scroll_timeout(
+        &mut values,
+        PAN_SCROLL_END_DELAY_MS + 1.0,
+        Viewport::IDENTITY,
+    );
     assert!(matches!(late, PanScrollTimeoutResult::Fired { .. }));
     assert!(!values.is_pan_scrolling);
 }
@@ -408,7 +427,8 @@ fn pan_zoom_start_records_button_and_state() {
 #[test]
 fn pan_zoom_start_wheel_does_not_flag_dragging() {
     let mut values = ZoomPanValues::default();
-    let event = ZoomEvent::from_transform(Transform::IDENTITY).with_source(PointerEvent::wheel(-1.0));
+    let event =
+        ZoomEvent::from_transform(Transform::IDENTITY).with_source(PointerEvent::wheel(-1.0));
     let result = create_pan_zoom_start_handler(&mut values, &event);
     assert!(!result.dragging);
 }
@@ -433,9 +453,11 @@ fn pan_zoom_emits_transform_unless_sync() {
 
 #[test]
 fn pan_zoom_end_fires_context_menu_for_unused_right_pan() {
-    let mut values = ZoomPanValues::default();
-    values.mouse_button = 2;
-    values.used_right_mouse_button = false;
+    let mut values = ZoomPanValues {
+        mouse_button: 2,
+        used_right_mouse_button: false,
+        ..ZoomPanValues::default()
+    };
     let params = PanZoomEndParams {
         pan_on_drag: PanOnDrag::Buttons(vec![2]),
         pan_on_scroll: false,
@@ -449,9 +471,11 @@ fn pan_zoom_end_fires_context_menu_for_unused_right_pan() {
 
 #[test]
 fn pan_zoom_end_skips_context_menu_after_actual_pan() {
-    let mut values = ZoomPanValues::default();
-    values.mouse_button = 2;
-    values.used_right_mouse_button = true;
+    let mut values = ZoomPanValues {
+        mouse_button: 2,
+        used_right_mouse_button: true,
+        ..ZoomPanValues::default()
+    };
     let params = PanZoomEndParams {
         pan_on_drag: PanOnDrag::Buttons(vec![2]),
         pan_on_scroll: false,
@@ -467,8 +491,10 @@ fn pan_zoom_end_skips_context_menu_after_actual_pan() {
 
 #[test]
 fn pan_zoom_end_clears_zooming_state() {
-    let mut values = ZoomPanValues::default();
-    values.is_zooming_or_panning = true;
+    let mut values = ZoomPanValues {
+        is_zooming_or_panning: true,
+        ..ZoomPanValues::default()
+    };
     let params = PanZoomEndParams::default();
     create_pan_zoom_end_handler(
         &mut values,
@@ -480,7 +506,10 @@ fn pan_zoom_end_clears_zooming_state() {
 
 #[test]
 fn pointer_event_builders_are_composable() {
-    let event = PointerEvent::wheel(-5.0).with_ctrl().with_shift().with_class("nopan");
+    let event = PointerEvent::wheel(-5.0)
+        .with_ctrl()
+        .with_shift()
+        .with_class("nopan");
     assert_eq!(event.kind, PointerEventKind::Wheel);
     assert!(event.ctrl_key);
     assert!(event.shift_key);

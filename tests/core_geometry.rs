@@ -207,7 +207,10 @@ fn smooth_step_path_with_zero_radius_is_corner() {
         None,
     );
 
-    assert_eq!(graphics.path, "M0 0L20 0L 50,0Q 50,0 50,0L 50,100Q 50,100 50,100L80 100L100 100");
+    assert_eq!(
+        graphics.path,
+        "M0 0L20 0L 50,0Q 50,0 50,0L 50,100Q 50,100 50,100L80 100L100 100"
+    );
 }
 
 #[test]

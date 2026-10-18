@@ -1,13 +1,18 @@
-use crate::core::geometry::{Rect, Transform};
-use crate::ui::background::{background_color, BackgroundPattern, BackgroundVariant};
-use crate::ui::edge_renderer::{edge_stroke, edge_stroke_width, EdgeRenderList, EdgeShape};
-use crate::ui::handle::handle_fill;
-use crate::ui::node_renderer::{node_border, node_fill, NodeBox, NodeRenderList};
-use crate::ui::paint::transformed_stroke_path;
-use crate::ui::paths::parse_svg_path;
-use crate::ui::store::FlowStore;
-use crate::ui::theme::FlowTheme;
-use gpui_kit::{fill, point, px, Bounds, Pixels, Point, Window};
+use gpui_kit::{Bounds, Pixels, Point, Window, fill, point, px};
+
+use crate::{
+    core::geometry::{Rect, Transform},
+    ui::{
+        background::{BackgroundPattern, BackgroundVariant, background_color},
+        edge_renderer::{EdgeRenderList, EdgeShape, edge_stroke, edge_stroke_width},
+        handle::handle_fill,
+        node_renderer::{NodeBox, NodeRenderList, node_border, node_fill},
+        paint::transformed_stroke_path,
+        paths::parse_svg_path,
+        store::FlowStore,
+        theme::FlowTheme,
+    },
+};
 
 pub struct PaneRenderData {
     pub bounds: Bounds<Pixels>,
@@ -55,7 +60,11 @@ pub fn build_render_data<S: Clone + PartialEq>(
             continue;
         }
         if let Some(graphics) = store.edge_path_for(edge) {
-            edges.push(EdgeShape::from_edge(edge, &graphics, store.edge_z_index(edge)));
+            edges.push(EdgeShape::from_edge(
+                edge,
+                &graphics,
+                store.edge_z_index(edge),
+            ));
         }
     }
     edges.sort_by(|a, b| {
@@ -104,10 +113,7 @@ pub fn paint_background(window: &mut Window, data: &PaneRenderData) {
     match pattern.variant {
         BackgroundVariant::Dots => {
             for (dot, radius) in pattern.dot_list(data.transform, width, height) {
-                let center = point(
-                    origin.x + px(dot.x as f32),
-                    origin.y + px(dot.y as f32),
-                );
+                let center = point(origin.x + px(dot.x as f32), origin.y + px(dot.y as f32));
                 let mut builder = gpui_kit::PathBuilder::fill();
                 builder.move_to(point(center.x - px(radius as f32), center.y));
                 builder.curve_to(
@@ -151,10 +157,8 @@ pub fn paint_background(window: &mut Window, data: &PaneRenderData) {
                 ));
                 has_any = true;
             }
-            if has_any {
-                if let Ok(path) = builder.build() {
-                    window.paint_path(path, pattern_color);
-                }
+            if has_any && let Ok(path) = builder.build() {
+                window.paint_path(path, pattern_color);
             }
         }
     }
@@ -240,10 +244,7 @@ pub fn paint_selection(window: &mut Window, data: &PaneRenderData) {
     }
     let origin = data.bounds.origin;
     let bounds = Bounds {
-        origin: point(
-            origin.x + px(rect.x as f32),
-            origin.y + px(rect.y as f32),
-        ),
+        origin: point(origin.x + px(rect.x as f32), origin.y + px(rect.y as f32)),
         size: gpui_kit::size(px(rect.width as f32), px(rect.height as f32)),
     };
     window.paint_quad(fill(bounds, data.theme.selection_border));

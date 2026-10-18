@@ -1,7 +1,12 @@
-use crate::core::geometry::{Position, Rect, XYPosition};
-use crate::core::node::{Handle, HandleType, NodeHandleBounds};
-use crate::ui::theme::FlowTheme;
 use gpui_kit::Pixels;
+
+use crate::{
+    core::{
+        geometry::{Position, Rect, XYPosition},
+        node::{Handle, HandleType, NodeHandleBounds},
+    },
+    ui::theme::FlowTheme,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HandleSide {
@@ -77,11 +82,7 @@ impl HandleGeometry {
     }
 }
 
-pub fn handle_geometry_list(
-    rect: &Rect,
-    handles: &[Handle],
-    radius: f64,
-) -> Vec<HandleGeometry> {
+pub fn handle_geometry_list(rect: &Rect, handles: &[Handle], radius: f64) -> Vec<HandleGeometry> {
     handles
         .iter()
         .map(|handle| HandleGeometry::from_handle(rect, handle, radius))

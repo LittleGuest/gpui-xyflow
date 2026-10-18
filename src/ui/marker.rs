@@ -1,7 +1,12 @@
-use crate::core::edge::{EdgeMarkerType, MarkerType};
-use crate::core::geometry::Position;
-use crate::ui::paths::{SvgPath, polyline};
 use gpui_kit::px;
+
+use crate::{
+    core::{
+        edge::{EdgeMarkerType, MarkerType},
+        geometry::Position,
+    },
+    ui::paths::{SvgPath, polyline},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MarkerVariant {
@@ -258,17 +263,11 @@ pub fn arrow_head_points(
     let right = angle - spread_degrees.to_radians();
     [
         tip,
-        (
-            tip.0 - length * left.cos(),
-            tip.1 - length * left.sin(),
-        ),
-        (
-            tip.0 - length * right.cos(),
-            tip.1 - length * right.sin(),
-        ),
+        (tip.0 - length * left.cos(), tip.1 - length * left.sin()),
+        (tip.0 - length * right.cos(), tip.1 - length * right.sin()),
     ]
 }
 
 pub fn marker_path_string(spec: &MarkerSpec) -> String {
-    spec.marker_path().to_string()
+    spec.marker_path().to_svg_string()
 }

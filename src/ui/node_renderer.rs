@@ -1,6 +1,10 @@
-use crate::core::geometry::{Position, Rect, Transform, XYPosition};
-use crate::core::node::{Handle, HandleType, InternalNode, Node};
-use crate::ui::theme::FlowTheme;
+use crate::{
+    core::{
+        geometry::{Position, Rect, Transform, XYPosition},
+        node::{Handle, HandleType, InternalNode, Node},
+    },
+    ui::theme::FlowTheme,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NodeVariant {
@@ -56,7 +60,10 @@ pub struct NodeBox {
 }
 
 impl NodeBox {
-    pub fn from_internal<S: Clone>(node: &InternalNode<S>, origin: crate::core::geometry::NodeOrigin) -> Self {
+    pub fn from_internal<S: Clone>(
+        node: &InternalNode<S>,
+        origin: crate::core::geometry::NodeOrigin,
+    ) -> Self {
         let dimensions = node.size();
         let position = node.internals.position_absolute;
         let rect = Rect::new(
@@ -189,12 +196,8 @@ pub fn node_border(theme: &FlowTheme, selected: bool) -> gpui_kit::Rgba {
     }
 }
 
-pub fn node_text_color(theme: &FlowTheme, variant: NodeVariant) -> gpui_kit::Rgba {
-    if variant.is_group() {
-        theme.node_color
-    } else {
-        theme.node_color
-    }
+pub fn node_text_color(theme: &FlowTheme, _variant: NodeVariant) -> gpui_kit::Rgba {
+    theme.node_color
 }
 
 pub fn node_screen_rect(rect: &Rect, transform: Transform) -> Rect {
@@ -216,8 +219,7 @@ pub struct NodeRenderList {
 impl NodeRenderList {
     pub fn new(mut nodes: Vec<NodeBox>) -> Self {
         nodes.sort_by(|a, b| {
-            a.z
-                .partial_cmp(&b.z)
+            a.z.partial_cmp(&b.z)
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| a.id.cmp(&b.id))
         });
@@ -233,10 +235,7 @@ impl NodeRenderList {
     }
 
     pub fn find_at(&self, point: XYPosition) -> Option<&NodeBox> {
-        self.nodes
-            .iter()
-            .rev()
-            .find(|node| node.contains(point))
+        self.nodes.iter().rev().find(|node| node.contains(point))
     }
 
     pub fn find(&self, id: &str) -> Option<&NodeBox> {

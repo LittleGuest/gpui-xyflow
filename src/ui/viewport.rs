@@ -116,7 +116,9 @@ impl ScreenMapping {
     pub fn is_rect_visible(&self, rect: Rect, width: f64, height: f64) -> bool {
         let screen = self.flow_rect_to_screen(rect);
         let viewport = ViewportRect::new(0.0, 0.0, width, height);
-        ViewportRect::from_rect(screen).intersect(viewport).is_some()
+        ViewportRect::from_rect(screen)
+            .intersect(viewport)
+            .is_some()
     }
 }
 

@@ -1,10 +1,12 @@
 use gpui_kit::*;
-use gpui_xyflow::core::edge::{Edge, MarkerType};
-use gpui_xyflow::core::geometry::{Position, XYPosition};
-use gpui_xyflow::core::node::{Handle, HandleType, Node};
-use gpui_xyflow::ui::flow::Flow;
-use gpui_xyflow::ui::store::FlowProps;
-use gpui_xyflow::ui::theme::FlowTheme;
+use gpui_xyflow::{
+    core::{
+        edge::{Edge, MarkerType},
+        geometry::{Position, XYPosition},
+        node::{Handle, HandleType, Node},
+    },
+    ui::{flow::Flow, store::FlowProps, theme::FlowTheme},
+};
 
 struct Demo {
     flow: Entity<Flow>,
@@ -47,7 +49,13 @@ fn build_nodes() -> Vec<Node<String>> {
         .with_size(150.0, 54.0)
         .with_measured(150.0, 54.0)
         .with_source_position(Position::Bottom);
-    input.handles = vec![Handle::new("1", HandleType::Source, Position::Bottom, 0.5, 1.0)];
+    input.handles = vec![Handle::new(
+        "1",
+        HandleType::Source,
+        Position::Bottom,
+        0.5,
+        1.0,
+    )];
     nodes.push(input);
 
     let mut middle = Node::new("2", XYPosition::new(400.0, 280.0), "default".to_string())
@@ -67,25 +75,35 @@ fn build_nodes() -> Vec<Node<String>> {
         .with_size(150.0, 54.0)
         .with_measured(150.0, 54.0)
         .with_target_position(Position::Top);
-    output.handles = vec![Handle::new("3", HandleType::Target, Position::Top, 0.5, 0.0)];
+    output.handles = vec![Handle::new(
+        "3",
+        HandleType::Target,
+        Position::Top,
+        0.5,
+        0.0,
+    )];
     nodes.push(output);
 
     nodes
 }
 
 fn build_edges() -> Vec<Edge<String>> {
-    let mut first = Edge::default();
-    first.id = "e1-2".to_string();
-    first.source = "1".to_string();
-    first.target = "2".to_string();
+    let mut first = Edge {
+        id: "e1-2".to_string(),
+        source: "1".to_string(),
+        target: "2".to_string(),
+        ..Edge::default()
+    };
     first.marker_end = Some(gpui_xyflow::core::edge::EdgeMarkerType::Marker(
         gpui_xyflow::core::edge::EdgeMarker::new(MarkerType::ArrowClosed),
     ));
 
-    let mut second = Edge::default();
-    second.id = "e2-3".to_string();
-    second.source = "2".to_string();
-    second.target = "3".to_string();
+    let mut second = Edge {
+        id: "e2-3".to_string(),
+        source: "2".to_string(),
+        target: "3".to_string(),
+        ..Edge::default()
+    };
     second.marker_end = Some(gpui_xyflow::core::edge::EdgeMarkerType::Marker(
         gpui_xyflow::core::edge::EdgeMarker::new(MarkerType::ArrowClosed),
     ));
@@ -98,10 +116,7 @@ fn main() {
         gpui_kit::init(cx);
 
         gpui_kit::open_window(WindowOptions::default(), cx, |_, cx| {
-            cx.new(|cx| {
-                let demo = Demo::new(cx);
-                demo
-            })
+            cx.new(|cx| Demo::new(cx))
         })
         .expect("failed to open window");
     });

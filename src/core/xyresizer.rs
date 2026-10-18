@@ -168,11 +168,7 @@ fn get_size_clamp(size: f64, min_size: f64, max_size: f64) -> f64 {
 }
 
 fn xor(a: bool, b: bool) -> bool {
-    if a {
-        !b
-    } else {
-        b
-    }
+    if a { !b } else { b }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -223,14 +219,16 @@ pub fn get_dimensions_after_resize(
         let mut y_extent_clamp = 0.0;
 
         if affects_x && dist_x < 0.0 {
-            x_extent_clamp = get_lower_extent_clamp(start_x + dist_x + origin_offset_x, extent[0][0]);
+            x_extent_clamp =
+                get_lower_extent_clamp(start_x + dist_x + origin_offset_x, extent[0][0]);
         } else if !affects_x && dist_x > 0.0 {
             x_extent_clamp =
                 get_upper_extent_clamp(start_x + new_width + origin_offset_x, extent[1][0]);
         }
 
         if affects_y && dist_y < 0.0 {
-            y_extent_clamp = get_lower_extent_clamp(start_y + dist_y + origin_offset_y, extent[0][1]);
+            y_extent_clamp =
+                get_lower_extent_clamp(start_y + dist_y + origin_offset_y, extent[0][1]);
         } else if !affects_y && dist_y > 0.0 {
             y_extent_clamp =
                 get_upper_extent_clamp(start_y + new_height + origin_offset_y, extent[1][1]);
@@ -270,19 +268,20 @@ pub fn get_dimensions_after_resize(
             clamp_x = clamp_x.max(aspect_height_clamp);
 
             if let Some(extent) = extent {
-                let aspect_extent_clamp = if (!affects_x && !affects_y)
-                    || (affects_x && !affects_y && is_diagonal)
-                {
-                    get_upper_extent_clamp(
-                        start_y + origin_offset_y + new_width / aspect_ratio,
-                        extent[1][1],
-                    ) * aspect_ratio
-                } else {
-                    get_lower_extent_clamp(
-                        start_y + origin_offset_y + (if affects_x { dist_x } else { -dist_x }) / aspect_ratio,
-                        extent[0][1],
-                    ) * aspect_ratio
-                };
+                let aspect_extent_clamp =
+                    if (!affects_x && !affects_y) || (affects_x && !affects_y && is_diagonal) {
+                        get_upper_extent_clamp(
+                            start_y + origin_offset_y + new_width / aspect_ratio,
+                            extent[1][1],
+                        ) * aspect_ratio
+                    } else {
+                        get_lower_extent_clamp(
+                            start_y
+                                + origin_offset_y
+                                + (if affects_x { dist_x } else { -dist_x }) / aspect_ratio,
+                            extent[0][1],
+                        ) * aspect_ratio
+                    };
                 clamp_x = clamp_x.max(aspect_extent_clamp);
             }
 
@@ -311,20 +310,20 @@ pub fn get_dimensions_after_resize(
             clamp_y = clamp_y.max(aspect_width_clamp);
 
             if let Some(extent) = extent {
-                let aspect_extent_clamp = if (!affects_x && !affects_y)
-                    || (affects_y && !affects_x && is_diagonal)
-                {
-                    get_upper_extent_clamp(
-                        start_x + new_height * aspect_ratio + origin_offset_x,
-                        extent[1][0],
-                    ) / aspect_ratio
-                } else {
-                    get_lower_extent_clamp(
-                        start_x + (if affects_y { dist_y } else { -dist_y }) * aspect_ratio
-                            + origin_offset_x,
-                        extent[0][0],
-                    ) / aspect_ratio
-                };
+                let aspect_extent_clamp =
+                    if (!affects_x && !affects_y) || (affects_y && !affects_x && is_diagonal) {
+                        get_upper_extent_clamp(
+                            start_x + new_height * aspect_ratio + origin_offset_x,
+                            extent[1][0],
+                        ) / aspect_ratio
+                    } else {
+                        get_lower_extent_clamp(
+                            start_x
+                                + (if affects_y { dist_y } else { -dist_y }) * aspect_ratio
+                                + origin_offset_x,
+                            extent[0][0],
+                        ) / aspect_ratio
+                    };
                 clamp_y = clamp_y.max(aspect_extent_clamp);
             }
 
@@ -351,9 +350,17 @@ pub fn get_dimensions_after_resize(
     if keep_aspect_ratio {
         if is_diagonal {
             if new_width > new_height * aspect_ratio {
-                dist_y = (if xor(affects_x, affects_y) { -dist_x } else { dist_x }) / aspect_ratio;
+                dist_y = (if xor(affects_x, affects_y) {
+                    -dist_x
+                } else {
+                    dist_x
+                }) / aspect_ratio;
             } else {
-                dist_x = (if xor(affects_x, affects_y) { -dist_y } else { dist_y }) * aspect_ratio;
+                dist_x = (if xor(affects_x, affects_y) {
+                    -dist_y
+                } else {
+                    dist_y
+                }) * aspect_ratio;
             }
         } else if is_horizontal {
             dist_y = dist_x / aspect_ratio;
@@ -570,10 +577,7 @@ impl XYResizer {
         self.child_changes.clear();
     }
 
-    pub fn set_child_extents(
-        &mut self,
-        children: Vec<(String, ResizeParams)>,
-    ) {
+    pub fn set_child_extents(&mut self, children: Vec<(String, ResizeParams)>) {
         self.child_changes = children
             .into_iter()
             .map(|(id, params)| {

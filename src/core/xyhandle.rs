@@ -1,10 +1,13 @@
-use crate::core::connect::{
-    get_closest_handle, is_valid_handle, start_connection, update_connection, ConnectionInProgress,
-    ConnectionState, StartConnectionParams, UpdateConnectionParams, ValidHandleParams,
+use crate::core::{
+    connect::{
+        ConnectionInProgress, ConnectionState, StartConnectionParams, UpdateConnectionParams,
+        ValidHandleParams, get_closest_handle, is_valid_handle, start_connection,
+        update_connection,
+    },
+    geometry::{Position, Transform, XYPosition},
+    graph::{ConnectionMode as Mode, get_handle_position},
+    node::{Handle, HandleType, InternalNode, NodeLookup},
 };
-use crate::core::geometry::{Position, Transform, XYPosition};
-use crate::core::graph::{get_handle_position, ConnectionMode as Mode};
-use crate::core::node::{Handle, HandleType, InternalNode, NodeLookup};
 
 pub fn get_handle<S: Clone>(
     node_id: &str,
@@ -26,7 +29,10 @@ pub fn get_handle<S: Clone>(
     };
 
     let mut handle = match handle_id {
-        Some(id) => handles.into_iter().find(|handle| handle.id.as_deref() == Some(id)).cloned(),
+        Some(id) => handles
+            .into_iter()
+            .find(|handle| handle.id.as_deref() == Some(id))
+            .cloned(),
         None => handles.first().map(|handle| (*handle).clone()),
     }?;
 
@@ -237,16 +243,10 @@ impl<S: Clone> XYHandle<S> {
         node_lookup: &NodeLookup<S>,
         is_valid_connection: &dyn Fn(&crate::core::edge::Connection) -> bool,
     ) -> Option<Handle> {
-        let Some(from) = self.click_start_handle.as_ref() else {
-            return None;
-        };
+        let from = self.click_start_handle.as_ref()?;
         let logical = transform.invert(pointer);
-        let closest = get_closest_handle(
-            logical,
-            self.options.connection_radius,
-            node_lookup,
-            from,
-        )?;
+        let closest =
+            get_closest_handle(logical, self.options.connection_radius, node_lookup, from)?;
         let result = is_valid_handle(ValidHandleParams {
             handle: Some(&closest),
             connection_mode: self.options.connection_mode,
@@ -256,11 +256,7 @@ impl<S: Clone> XYHandle<S> {
             is_valid_connection,
             node_lookup,
         });
-        if result.is_valid {
-            Some(closest)
-        } else {
-            None
-        }
+        if result.is_valid { Some(closest) } else { None }
     }
 }
 
@@ -275,15 +271,15 @@ pub fn handle_for_node<S: Clone>(
         HandleType::Target => bounds.target.iter().collect(),
     };
     match handle_id {
-        Some(id) => handles.into_iter().find(|h| h.id.as_deref() == Some(id)).cloned(),
+        Some(id) => handles
+            .into_iter()
+            .find(|h| h.id.as_deref() == Some(id))
+            .cloned(),
         None => handles.first().map(|h| (*h).clone()),
     }
 }
 
-pub fn handle_position_of<S: Clone>(
-    node: &InternalNode<S>,
-    handle: &Handle,
-) -> XYPosition {
+pub fn handle_position_of<S: Clone>(node: &InternalNode<S>, handle: &Handle) -> XYPosition {
     get_handle_position(node, Some(handle), handle.position, true)
 }
 

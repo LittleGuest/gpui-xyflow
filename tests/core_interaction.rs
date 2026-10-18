@@ -14,16 +14,18 @@ fn handle_node(id: &str, x: f64, y: f64) -> Node<String> {
 fn lookup(nodes: &[Node<String>]) -> NodeLookup {
     let mut node_lookup = NodeLookup::new();
     let mut parent_lookup = ParentLookup::new();
-    adopt_user_nodes(nodes, &mut node_lookup, &mut parent_lookup, &AdoptOptions::default());
+    adopt_user_nodes(
+        nodes,
+        &mut node_lookup,
+        &mut parent_lookup,
+        &AdoptOptions::default(),
+    );
     node_lookup
 }
 
 #[test]
 fn closest_handle_picks_nearby_handle() {
-    let nodes = vec![
-        handle_node("a", 0.0, 0.0),
-        handle_node("b", 0.0, 200.0),
-    ];
+    let nodes = vec![handle_node("a", 0.0, 0.0), handle_node("b", 0.0, 200.0)];
     let node_lookup = lookup(&nodes);
     let from = node_lookup["a"]
         .internals
@@ -33,22 +35,14 @@ fn closest_handle_picks_nearby_handle() {
         .source[0]
         .clone();
 
-    let closest = get_closest_handle(
-        XYPosition::new(50.0, 200.0),
-        20.0,
-        &node_lookup,
-        &from,
-    );
+    let closest = get_closest_handle(XYPosition::new(50.0, 200.0), 20.0, &node_lookup, &from);
 
     assert_eq!(closest.map(|handle| handle.node_id), Some("b".to_string()));
 }
 
 #[test]
 fn closest_handle_returns_none_out_of_radius() {
-    let nodes = vec![
-        handle_node("a", 0.0, 0.0),
-        handle_node("b", 0.0, 2000.0),
-    ];
+    let nodes = vec![handle_node("a", 0.0, 0.0), handle_node("b", 0.0, 2000.0)];
     let node_lookup = lookup(&nodes);
     let from = node_lookup["a"]
         .internals
@@ -421,10 +415,12 @@ fn update_nodes_moves_selection_by_pointer_delta() {
 
 #[test]
 fn update_nodes_snaps_to_grid() {
-    let nodes = vec![Node::new("a", XYPosition::new(0.0, 0.0), String::new())
-        .with_size(100.0, 50.0)
-        .with_measured(100.0, 50.0)
-        .selected(true)];
+    let nodes = vec![
+        Node::new("a", XYPosition::new(0.0, 0.0), String::new())
+            .with_size(100.0, 50.0)
+            .with_measured(100.0, 50.0)
+            .selected(true),
+    ];
     let node_lookup = lookup(&nodes);
 
     let store = DragStore {
@@ -451,10 +447,12 @@ fn update_nodes_snaps_to_grid() {
 
 #[test]
 fn update_nodes_reports_no_change_when_pointer_static() {
-    let nodes = vec![Node::new("a", XYPosition::new(0.0, 0.0), String::new())
-        .with_size(100.0, 50.0)
-        .with_measured(100.0, 50.0)
-        .selected(true)];
+    let nodes = vec![
+        Node::new("a", XYPosition::new(0.0, 0.0), String::new())
+            .with_size(100.0, 50.0)
+            .with_measured(100.0, 50.0)
+            .selected(true),
+    ];
     let node_lookup = lookup(&nodes);
     let store = DragStore {
         node_lookup: node_lookup.clone(),
@@ -488,7 +486,12 @@ fn update_nodes_records_parent_expansion() {
         node_lookup: node_lookup.clone(),
         ..DragStore::default()
     };
-    let mut drag_items = get_drag_items(&node_lookup, true, XYPosition::new(60.0, 60.0), Some("child"));
+    let mut drag_items = get_drag_items(
+        &node_lookup,
+        true,
+        XYPosition::new(60.0, 60.0),
+        Some("child"),
+    );
 
     let update = update_nodes(
         UpdateNodesParams {
@@ -521,5 +524,8 @@ fn snap_offset_aligns_multiple_nodes() {
         .expect("offset");
     let reference = XYPosition::new(8.0 - 2.0, 9.0 - 1.0);
     let snapped = snap_position(reference, [15.0, 15.0]);
-    assert_eq!(offset, XYPosition::new(snapped.x - reference.x, snapped.y - reference.y));
+    assert_eq!(
+        offset,
+        XYPosition::new(snapped.x - reference.x, snapped.y - reference.y)
+    );
 }

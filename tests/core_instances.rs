@@ -1,16 +1,24 @@
-use gpui_xyflow::core::geometry::{CoordinateExtent, PanOnScrollMode, Transform, Viewport, XYPosition};
-use gpui_xyflow::core::panzoom::{PanOnDrag, PanZoomOptions};
-use gpui_xyflow::core::xyminimap::{MinimapPhase, MinimapUpdate, XYMinimap};
-use gpui_xyflow::core::xypanzoom::eventhandler::ZoomEvent;
-use gpui_xyflow::core::xypanzoom::filter::PointerEvent;
-use gpui_xyflow::core::xypanzoom::instance::{PanZoomUpdateOptions, XYPanZoom};
+use gpui_xyflow::core::{
+    geometry::{CoordinateExtent, PanOnScrollMode, Transform, Viewport, XYPosition},
+    panzoom::{PanOnDrag, PanZoomOptions},
+    xyminimap::{MinimapPhase, MinimapUpdate, XYMinimap},
+    xypanzoom::{
+        eventhandler::ZoomEvent,
+        filter::PointerEvent,
+        instance::{PanZoomUpdateOptions, XYPanZoom},
+    },
+};
 
 fn extent() -> CoordinateExtent {
     [[0.0, 0.0], [800.0, 600.0]]
 }
 
 fn instance() -> XYPanZoom {
-    XYPanZoom::new(Viewport::new(0.0, 0.0, 1.0), PanZoomOptions::default(), extent())
+    XYPanZoom::new(
+        Viewport::new(0.0, 0.0, 1.0),
+        PanZoomOptions::default(),
+        extent(),
+    )
 }
 
 #[test]
@@ -34,8 +42,10 @@ fn xypanzoom_update_returns_handlers() {
 #[test]
 fn xypanzoom_pan_on_scroll_swaps_handlers() {
     let mut pan_zoom = instance();
-    let mut options = PanZoomUpdateOptions::default();
-    options.pan_on_scroll = true;
+    let options = PanZoomUpdateOptions {
+        pan_on_scroll: true,
+        ..PanZoomUpdateOptions::default()
+    };
     let handlers = pan_zoom.update(&options);
     assert!(handlers.is_pan_on_scroll);
     assert!(handlers.pan_on_scroll.is_some());
@@ -45,9 +55,11 @@ fn xypanzoom_pan_on_scroll_swaps_handlers() {
 #[test]
 fn xypanzoom_pan_on_scroll_disabled_by_zoom_key() {
     let mut pan_zoom = instance();
-    let mut options = PanZoomUpdateOptions::default();
-    options.pan_on_scroll = true;
-    options.zoom_activation_key_pressed = true;
+    let options = PanZoomUpdateOptions {
+        pan_on_scroll: true,
+        zoom_activation_key_pressed: true,
+        ..PanZoomUpdateOptions::default()
+    };
     let handlers = pan_zoom.update(&options);
     assert!(!handlers.is_pan_on_scroll);
 }
@@ -55,8 +67,10 @@ fn xypanzoom_pan_on_scroll_disabled_by_zoom_key() {
 #[test]
 fn xypanzoom_selection_on_drag_sets_infinite_click_distance() {
     let mut pan_zoom = instance();
-    let mut options = PanZoomUpdateOptions::default();
-    options.selection_on_drag = true;
+    let options = PanZoomUpdateOptions {
+        selection_on_drag: true,
+        ..PanZoomUpdateOptions::default()
+    };
     pan_zoom.update(&options);
     assert!(pan_zoom.click_distance().is_infinite());
 }
@@ -64,8 +78,10 @@ fn xypanzoom_selection_on_drag_sets_infinite_click_distance() {
 #[test]
 fn xypanzoom_negative_click_distance_becomes_zero() {
     let mut pan_zoom = instance();
-    let mut options = PanZoomUpdateOptions::default();
-    options.pane_click_distance = -5.0;
+    let options = PanZoomUpdateOptions {
+        pane_click_distance: -5.0,
+        ..PanZoomUpdateOptions::default()
+    };
     pan_zoom.update(&options);
     assert_eq!(pan_zoom.click_distance(), 0.0);
 }
@@ -84,8 +100,10 @@ fn xypanzoom_destroy_blocks_events() {
 #[test]
 fn xypanzoom_update_after_user_selection_destroys() {
     let mut pan_zoom = instance();
-    let mut options = PanZoomUpdateOptions::default();
-    options.user_selection_active = true;
+    let options = PanZoomUpdateOptions {
+        user_selection_active: true,
+        ..PanZoomUpdateOptions::default()
+    };
     pan_zoom.update(&options);
     assert!(pan_zoom.destroyed());
 }
@@ -169,9 +187,11 @@ fn xypanzoom_sync_viewport_applies() {
 #[test]
 fn xypanzoom_wheel_scrolls_when_pan_on_scroll() {
     let mut pan_zoom = instance();
-    let mut options = PanZoomUpdateOptions::default();
-    options.pan_on_scroll = true;
-    options.pan_on_scroll_mode = PanOnScrollMode::Free;
+    let options = PanZoomUpdateOptions {
+        pan_on_scroll: true,
+        pan_on_scroll_mode: PanOnScrollMode::Free,
+        ..PanZoomUpdateOptions::default()
+    };
     pan_zoom.update(&options);
     let before = pan_zoom.get_viewport();
     let outcome = pan_zoom.wheel(&PointerEvent::wheel(-100.0), 0.0);
@@ -182,8 +202,10 @@ fn xypanzoom_wheel_scrolls_when_pan_on_scroll() {
 #[test]
 fn xypanzoom_wheel_rejected_over_nopan() {
     let mut pan_zoom = instance();
-    let mut options = PanZoomUpdateOptions::default();
-    options.pan_on_scroll = true;
+    let options = PanZoomUpdateOptions {
+        pan_on_scroll: true,
+        ..PanZoomUpdateOptions::default()
+    };
     pan_zoom.update(&options);
     let before = pan_zoom.get_viewport();
     let outcome = pan_zoom.wheel(&PointerEvent::wheel(-100.0).with_class("nopan"), 0.0);
@@ -194,8 +216,10 @@ fn xypanzoom_wheel_rejected_over_nopan() {
 #[test]
 fn xypanzoom_right_click_pan_detection() {
     let mut pan_zoom = instance();
-    let mut options = PanZoomUpdateOptions::default();
-    options.pan_on_drag = PanOnDrag::Buttons(vec![0, 2]);
+    let options = PanZoomUpdateOptions {
+        pan_on_drag: PanOnDrag::Buttons(vec![0, 2]),
+        ..PanZoomUpdateOptions::default()
+    };
     pan_zoom.update(&options);
     assert!(pan_zoom.right_click_pan(2));
     assert!(!pan_zoom.right_click_pan(0));
@@ -232,10 +256,16 @@ fn minimap_wheel_respects_scale_extent() {
 #[test]
 fn minimap_wheel_disabled_when_not_zoomable() {
     let mut minimap = XYMinimap::new();
-    let mut update = MinimapUpdate::default();
-    update.zoomable = false;
+    let update = MinimapUpdate {
+        zoomable: false,
+        ..MinimapUpdate::default()
+    };
     minimap.update(update);
-    assert!(minimap.wheel(Viewport::IDENTITY, -100.0, false, false).is_none());
+    assert!(
+        minimap
+            .wheel(Viewport::IDENTITY, -100.0, false, false)
+            .is_none()
+    );
 }
 
 #[test]
@@ -245,20 +275,30 @@ fn minimap_pan_lifecycle() {
     minimap.pan_start(XYPosition::new(10.0, 10.0));
     assert!(minimap.is_panning());
     let result = minimap
-        .pan_move(Viewport::new(0.0, 0.0, 1.0), XYPosition::new(20.0, 10.0), 0.5)
+        .pan_move(
+            Viewport::new(0.0, 0.0, 1.0),
+            XYPosition::new(20.0, 10.0),
+            0.5,
+        )
         .unwrap();
     assert_eq!(result.delta, XYPosition::new(10.0, 0.0));
     assert!(result.viewport.x < 0.0);
     minimap.pan_end();
     assert_eq!(minimap.phase(), MinimapPhase::Idle);
-    assert!(minimap.pan_move(Viewport::IDENTITY, XYPosition::new(0.0, 0.0), 1.0).is_none());
+    assert!(
+        minimap
+            .pan_move(Viewport::IDENTITY, XYPosition::new(0.0, 0.0), 1.0)
+            .is_none()
+    );
 }
 
 #[test]
 fn minimap_pan_disabled_when_not_pannable() {
     let mut minimap = XYMinimap::new();
-    let mut update = MinimapUpdate::default();
-    update.pannable = false;
+    let update = MinimapUpdate {
+        pannable: false,
+        ..MinimapUpdate::default()
+    };
     minimap.update(update);
     minimap.pan_start(XYPosition::new(0.0, 0.0));
     assert!(!minimap.is_panning());
@@ -267,12 +307,18 @@ fn minimap_pan_disabled_when_not_pannable() {
 #[test]
 fn minimap_inverse_pan_flips_direction() {
     let mut minimap = XYMinimap::new();
-    let mut update = MinimapUpdate::default();
-    update.inverse_pan = true;
+    let update = MinimapUpdate {
+        inverse_pan: true,
+        ..MinimapUpdate::default()
+    };
     minimap.update(update);
     minimap.pan_start(XYPosition::new(0.0, 0.0));
     let result = minimap
-        .pan_move(Viewport::new(0.0, 0.0, 1.0), XYPosition::new(10.0, 0.0), 0.5)
+        .pan_move(
+            Viewport::new(0.0, 0.0, 1.0),
+            XYPosition::new(10.0, 0.0),
+            0.5,
+        )
         .unwrap();
     assert!(result.viewport.x > 0.0);
 }

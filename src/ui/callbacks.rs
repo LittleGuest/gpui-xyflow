@@ -1,10 +1,11 @@
-use std::fmt;
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
-use crate::core::change::{EdgeChange, NodeChange};
-use crate::core::connect::ConnectionInProgress;
-use crate::core::edge::Edge;
-use crate::core::node::Node;
+use crate::core::{
+    change::{EdgeChange, NodeChange},
+    connect::ConnectionInProgress,
+    edge::Edge,
+    node::Node,
+};
 
 pub type NodeChangeHandler<S> = Arc<dyn Fn(&[NodeChange<S>]) + Send + Sync>;
 pub type EdgeChangeHandler<S> = Arc<dyn Fn(&[EdgeChange<S>]) + Send + Sync>;

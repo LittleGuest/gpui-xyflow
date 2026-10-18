@@ -1,11 +1,13 @@
-use crate::core::edge::{
-    BezierPathOptions, EdgeMarkerType, PathOptions, SmoothStepPathOptions, StepPathOptions,
+use crate::core::{
+    edge::{
+        BezierPathOptions, EdgeMarkerType, PathOptions, SmoothStepPathOptions, StepPathOptions,
+    },
+    edge_path::{
+        get_bezier_edge_center, get_bezier_path, get_edge_center, get_simple_bezier_path,
+        get_smooth_step_path, get_step_path, get_straight_path,
+    },
+    geometry::{EdgePosition, Position, XYPosition},
 };
-use crate::core::edge_path::{
-    get_bezier_edge_center, get_bezier_path, get_edge_center, get_simple_bezier_path,
-    get_smooth_step_path, get_step_path, get_straight_path,
-};
-use crate::core::geometry::{EdgePosition, Position, XYPosition};
 
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct EdgeLabelStyle {
@@ -324,18 +326,10 @@ pub fn edge_component_output(
 pub fn edge_center_for(kind: EdgeComponentKind, position: &EdgePosition) -> XYPosition {
     let params = EdgePathParams::from_position(position);
     let output = edge_component_output(kind, &params);
-    XYPosition::new(
-        output.label_x.unwrap_or(0.0),
-        output.label_y.unwrap_or(0.0),
-    )
+    XYPosition::new(output.label_x.unwrap_or(0.0), output.label_y.unwrap_or(0.0))
 }
 
-pub fn straight_center(
-    source_x: f64,
-    source_y: f64,
-    target_x: f64,
-    target_y: f64,
-) -> XYPosition {
+pub fn straight_center(source_x: f64, source_y: f64, target_x: f64, target_y: f64) -> XYPosition {
     let center = get_edge_center(source_x, source_y, target_x, target_y);
     XYPosition::new(center.0, center.1)
 }

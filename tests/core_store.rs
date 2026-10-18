@@ -286,7 +286,9 @@ fn expand_parent_grows_parent_for_child() {
 #[test]
 fn get_drag_items_only_includes_draggable_selection() {
     let nodes = vec![
-        node("a", 0.0, 0.0).selected(true).with_measured(150.0, 40.0),
+        node("a", 0.0, 0.0)
+            .selected(true)
+            .with_measured(150.0, 40.0),
         node("b", 100.0, 0.0).with_measured(150.0, 40.0),
     ];
     let mut lookup = NodeLookup::new();
@@ -402,7 +404,11 @@ fn handles_are_parsed_into_bounds() {
     let mut parents = ParentLookup::new();
     adopt_user_nodes(&[node], &mut lookup, &mut parents, &AdoptOptions::default());
 
-    let bounds = lookup["a"].internals.handle_bounds.as_ref().expect("bounds");
+    let bounds = lookup["a"]
+        .internals
+        .handle_bounds
+        .as_ref()
+        .expect("bounds");
     assert_eq!(bounds.source.len(), 1);
     assert_eq!(bounds.target.len(), 1);
     assert_eq!(bounds.source[0].id.as_deref(), Some("out"));

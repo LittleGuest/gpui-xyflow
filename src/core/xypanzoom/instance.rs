@@ -1,15 +1,17 @@
-use crate::core::geometry::{CoordinateExtent, PanOnScrollMode, Transform, Viewport};
-use crate::core::panzoom::{PanOnDrag, PanZoom, PanZoomOptions};
-use crate::core::xypanzoom::eventhandler::{
-    create_pan_on_scroll_handler, create_pan_zoom_end_handler, create_pan_zoom_handler,
-    create_zoom_on_scroll_handler,
-    create_pan_zoom_start_handler, poll_pan_scroll_timeout, PanOnScrollParams, PanScrollResult,
-    PanScrollTimeoutResult, PanZoomEndParams, PanZoomEndResult, PanZoomParams, PanZoomResult,
-    PanZoomStartResult, ZoomEvent, ZoomOnScrollParams, ZoomOnScrollResult, ZoomPanValues,
-};
-use crate::core::xypanzoom::filter::{create_filter, FilterParams, FilterOutcome, PointerEvent};
-use crate::core::xypanzoom::utils::{
-    get_d3_transition, is_right_click_pan, ViewportTransition,
+use crate::core::{
+    geometry::{CoordinateExtent, PanOnScrollMode, Transform, Viewport},
+    panzoom::{PanOnDrag, PanZoom, PanZoomOptions},
+    xypanzoom::{
+        eventhandler::{
+            PanOnScrollParams, PanScrollResult, PanScrollTimeoutResult, PanZoomEndParams,
+            PanZoomEndResult, PanZoomParams, PanZoomResult, PanZoomStartResult, ZoomEvent,
+            ZoomOnScrollParams, ZoomOnScrollResult, ZoomPanValues, create_pan_on_scroll_handler,
+            create_pan_zoom_end_handler, create_pan_zoom_handler, create_pan_zoom_start_handler,
+            create_zoom_on_scroll_handler, poll_pan_scroll_timeout,
+        },
+        filter::{FilterOutcome, FilterParams, PointerEvent, create_filter},
+        utils::{ViewportTransition, get_d3_transition, is_right_click_pan},
+    },
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -71,23 +73,12 @@ pub struct PanZoomHandlers {
     pub click_distance: f64,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct PanZoomEventOutput {
     pub pan_zoom_start: Option<PanZoomStartResult>,
     pub pan_zoom: Option<PanZoomResult>,
     pub pan_zoom_end: Option<PanZoomEndResult>,
     pub transform_changed: Option<Transform>,
-}
-
-impl Default for PanZoomEventOutput {
-    fn default() -> Self {
-        PanZoomEventOutput {
-            pan_zoom_start: None,
-            pan_zoom: None,
-            pan_zoom_end: None,
-            transform_changed: None,
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -264,13 +255,8 @@ impl XYPanZoom {
 
         if let Some(params) = &self.handlers.pan_on_scroll {
             let current_zoom = self.pan_zoom.transform().zoom();
-            let result = create_pan_on_scroll_handler(
-                params,
-                &mut self.values,
-                event,
-                current_zoom,
-                now_ms,
-            );
+            let result =
+                create_pan_on_scroll_handler(params, &mut self.values, event, current_zoom, now_ms);
             let mut transform = None;
             if let Some(zoom) = result.scaled_to {
                 self.pan_zoom.scale_to(zoom, None);
@@ -292,11 +278,11 @@ impl XYPanZoom {
             .zoom_on_scroll
             .as_ref()
             .map(|params| create_zoom_on_scroll_handler(params, event));
-        if let Some(result) = result {
-            if result.pass_through {
-                let zoom_factor = 2f64.powf(-event.delta_y * 0.002);
-                self.pan_zoom.scale_by(zoom_factor, None);
-            }
+        if let Some(result) = result
+            && result.pass_through
+        {
+            let zoom_factor = 2f64.powf(-event.delta_y * 0.002);
+            self.pan_zoom.scale_by(zoom_factor, None);
         }
         WheelOutcome {
             outcome,
@@ -321,7 +307,8 @@ impl XYPanZoom {
     }
 
     pub fn end(&mut self, event: &ZoomEvent) -> PanZoomEndResult {
-        let result = create_pan_zoom_end_handler(&mut self.values, &self.handlers.pan_zoom_end, event);
+        let result =
+            create_pan_zoom_end_handler(&mut self.values, &self.handlers.pan_zoom_end, event);
         if result.applied {
             self.pan_zoom.set_transform(event.transform);
         }
@@ -332,15 +319,19 @@ impl XYPanZoom {
         if self.destroyed {
             return PanZoomEventOutput::default();
         }
-        let mut output = PanZoomEventOutput::default();
-        output.pan_zoom_start = Some(self.start(event));
+        let pan_zoom_start = Some(self.start(event));
         let pan_zoom = self.zoom(event);
-        if pan_zoom.emit_transform_change {
-            output.transform_changed = Some(pan_zoom.transform);
+        let transform_changed = if pan_zoom.emit_transform_change {
+            Some(pan_zoom.transform)
+        } else {
+            None
+        };
+        PanZoomEventOutput {
+            pan_zoom_start,
+            transform_changed,
+            pan_zoom: Some(pan_zoom),
+            pan_zoom_end: Some(self.end(event)),
         }
-        output.pan_zoom = Some(pan_zoom);
-        output.pan_zoom_end = Some(self.end(event));
-        output
     }
 
     pub fn poll_timeout(&mut self, now_ms: f64) -> PanScrollTimeoutResult {

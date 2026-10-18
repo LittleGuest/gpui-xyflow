@@ -1,5 +1,7 @@
-use crate::core::geometry::{CoordinateExtent, NodeOrigin, SnapGrid};
-use crate::core::node::HandleType;
+use crate::core::{
+    geometry::{CoordinateExtent, NodeOrigin, SnapGrid},
+    node::HandleType,
+};
 
 pub const ELEMENT_SELECTION_KEYS: [&str; 3] = ["Enter", " ", "Escape"];
 

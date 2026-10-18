@@ -274,7 +274,11 @@ impl<S> Default for Edge<S> {
 }
 
 impl<S> Edge<S> {
-    pub fn new(id: impl Into<String>, source: impl Into<String>, target: impl Into<String>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        source: impl Into<String>,
+        target: impl Into<String>,
+    ) -> Self {
         Edge {
             id: id.into(),
             source: source.into(),

@@ -1,20 +1,26 @@
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicUsize, Ordering},
+};
 
-use gpui_xyflow::core::change::{NodeChange, NodePositionChange};
-use gpui_xyflow::core::edge::Edge;
-use gpui_xyflow::core::geometry::{CoordinateExtent, XYPosition};
-use gpui_xyflow::core::node::Node;
-use gpui_xyflow::ui::store::{FlowProps, FlowStore};
+use gpui_xyflow::{
+    core::{
+        change::{NodeChange, NodePositionChange},
+        edge::Edge,
+        geometry::XYPosition,
+        node::Node,
+    },
+    ui::store::{FlowProps, FlowStore},
+};
 
 fn node(id: &str, x: f64, y: f64) -> Node<String> {
-    let mut node = Node::<String>::default();
-    node.id = id.to_string();
-    node.position = XYPosition::new(x, y);
-    node.width = Some(80.0);
-    node.height = Some(40.0);
-    node
+    Node::<String> {
+        id: id.to_string(),
+        position: XYPosition::new(x, y),
+        width: Some(80.0),
+        height: Some(40.0),
+        ..Node::<String>::default()
+    }
 }
 
 fn store_with(nodes: Vec<Node<String>>) -> FlowStore<String> {
@@ -50,8 +56,10 @@ fn trigger_node_changes_invokes_callback() {
 fn trigger_node_changes_without_default_nodes_leaves_state() {
     let seen = Arc::new(AtomicUsize::new(0));
     let counter = seen.clone();
-    let mut props = FlowProps::<String>::default();
-    props.has_default_nodes = false;
+    let mut props = FlowProps::<String> {
+        has_default_nodes: false,
+        ..FlowProps::<String>::default()
+    };
     props.callbacks.on_nodes_change = Some(Arc::new(move |changes: &[NodeChange<String>]| {
         counter.fetch_add(changes.len(), Ordering::SeqCst);
     }));
@@ -84,18 +92,22 @@ fn trigger_node_changes_empty_is_noop() {
 fn trigger_edge_changes_invokes_callback() {
     let seen = Arc::new(AtomicUsize::new(0));
     let counter = seen.clone();
-    let mut props = FlowProps::<String>::default();
-    props.has_default_edges = true;
+    let mut props = FlowProps::<String> {
+        has_default_edges: true,
+        ..FlowProps::<String>::default()
+    };
     props.callbacks.on_edges_change = Some(Arc::new(
         move |changes: &[gpui_xyflow::core::change::EdgeChange<String>]| {
             counter.fetch_add(changes.len(), Ordering::SeqCst);
         },
     ));
     let mut store = FlowStore::<String>::new(props);
-    let mut edge = Edge::<String>::default();
-    edge.id = "e1".to_string();
-    edge.source = "a".to_string();
-    edge.target = "b".to_string();
+    let edge = Edge::<String> {
+        id: "e1".to_string(),
+        source: "a".to_string(),
+        target: "b".to_string(),
+        ..Edge::<String>::default()
+    };
     store.set_edges(vec![edge]);
     store.trigger_edge_changes(vec![gpui_xyflow::core::change::EdgeChange::Select(
         gpui_xyflow::core::change::SelectionChange {
@@ -158,15 +170,19 @@ fn node_change_middleware_chain_is_ordered() {
 #[test]
 fn edge_change_middleware_runs_against_edges() {
     let mut store = store_with(vec![node("a", 0.0, 0.0)]);
-    let mut edge = Edge::<String>::default();
-    edge.id = "e1".to_string();
-    edge.source = "a".to_string();
-    edge.target = "a".to_string();
+    let edge = Edge::<String> {
+        id: "e1".to_string(),
+        source: "a".to_string(),
+        target: "a".to_string(),
+        ..Edge::<String>::default()
+    };
     store.set_edges(vec![edge]);
-    store.add_edges_change_middleware(|changes: Vec<gpui_xyflow::core::change::EdgeChange<String>>, edges| {
-        assert_eq!(edges.len(), 1);
-        changes
-    });
+    store.add_edges_change_middleware(
+        |changes: Vec<gpui_xyflow::core::change::EdgeChange<String>>, edges| {
+            assert_eq!(edges.len(), 1);
+            changes
+        },
+    );
     let out = store.apply_edges_change_middleware(vec![]);
     assert!(out.is_empty());
 }
@@ -185,15 +201,14 @@ fn update_node_positions_emits_position_changes() {
     moved.position = XYPosition::new(30.0, 40.0);
     let received = Arc::new(Mutex::new(Vec::new()));
     let sink = received.clone();
-    store.props_mut().callbacks.on_nodes_change = Some(Arc::new(
-        move |changes: &[NodeChange<String>]| {
+    store.props_mut().callbacks.on_nodes_change =
+        Some(Arc::new(move |changes: &[NodeChange<String>]| {
             for change in changes {
                 if let NodeChange::Position(position) = change {
                     sink.lock().unwrap().push(position.clone());
                 }
             }
-        },
-    ));
+        }));
     store.props_mut().has_default_nodes = true;
     store.update_node_positions(&[moved], true);
     let captured = received.lock().unwrap();
@@ -214,15 +229,14 @@ fn update_node_positions_clamps_negative_for_expand_parent() {
     item.expand_parent = true;
     let received = Arc::new(Mutex::new(Vec::new()));
     let sink = received.clone();
-    store.props_mut().callbacks.on_nodes_change = Some(Arc::new(
-        move |changes: &[NodeChange<String>]| {
+    store.props_mut().callbacks.on_nodes_change =
+        Some(Arc::new(move |changes: &[NodeChange<String>]| {
             for change in changes {
                 if let NodeChange::Position(position) = change {
                     sink.lock().unwrap().push(position.clone());
                 }
             }
-        },
-    ));
+        }));
     store.update_node_positions(&[item], false);
     let captured = received.lock().unwrap();
     assert_eq!(captured[0].position.unwrap(), XYPosition::new(0.0, 0.0));
@@ -302,8 +316,10 @@ fn resolve_fit_view_centers_content() {
 
 #[test]
 fn maybe_resolve_fit_view_requires_initialized_nodes() {
-    let mut props = FlowProps::<String>::default();
-    props.fit_view_queued = true;
+    let props = FlowProps::<String> {
+        fit_view_queued: true,
+        ..FlowProps::<String>::default()
+    };
     let mut store = FlowStore::<String>::new(props);
     store.set_size(800.0, 600.0);
     store.maybe_resolve_fit_view();

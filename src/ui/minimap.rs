@@ -1,11 +1,14 @@
-use crate::core::geometry::{Rect, Transform, Viewport, XYPosition};
-use crate::core::node::NodeLookup;
-use crate::core::xyminimap::{
-    minimap_bounding_rect, minimap_layout, minimap_mask_path, minimap_nodes, minimap_pan,
-    minimap_viewbox, minimap_zoom, view_bounding_box, MinimapLayout, MinimapNode,
+use crate::{
+    core::{
+        geometry::{Rect, Transform, Viewport, XYPosition},
+        node::NodeLookup,
+        xyminimap::{
+            MinimapLayout, MinimapNode, minimap_bounding_rect, minimap_layout, minimap_mask_path,
+            minimap_nodes, minimap_pan, minimap_viewbox, minimap_zoom, view_bounding_box,
+        },
+    },
+    ui::{paths::parse_svg_path, theme::FlowTheme},
 };
-use crate::ui::paths::parse_svg_path;
-use crate::ui::theme::FlowTheme;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MinimapProps {

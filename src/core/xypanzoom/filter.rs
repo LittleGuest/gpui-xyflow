@@ -223,10 +223,11 @@ pub fn create_filter(params: &FilterParams, event: &PointerEvent) -> FilterOutco
         return FilterOutcome::Reject;
     }
 
-    if let PanOnDrag::Buttons(buttons) = &params.pan_on_drag {
-        if !buttons.contains(&event.button) && event.kind == PointerEventKind::MouseDown {
-            return FilterOutcome::Reject;
-        }
+    if let PanOnDrag::Buttons(buttons) = &params.pan_on_drag
+        && !buttons.contains(&event.button)
+        && event.kind == PointerEventKind::MouseDown
+    {
+        return FilterOutcome::Reject;
     }
 
     let button_allowed = match &params.pan_on_drag {

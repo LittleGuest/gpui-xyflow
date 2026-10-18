@@ -1,10 +1,11 @@
-use crate::core::edge::{Edge, EdgeGraphics};
-use crate::core::geometry::{
-    EdgePosition, NodeOrigin, Position, Rect, Transform, XYPosition, ZIndexMode,
-};
-use crate::core::node::{Handle, HandleType, InternalNode, Node, NodeLookup};
-use crate::core::utils::{
-    box_to_rect, get_bounds_of_boxes, get_rects_overlapping_area, internal_node_to_box, node_to_box,
+use crate::core::{
+    edge::{Edge, EdgeGraphics},
+    geometry::{EdgePosition, NodeOrigin, Position, Rect, Transform, XYPosition, ZIndexMode},
+    node::{Handle, HandleType, InternalNode, Node, NodeLookup},
+    utils::{
+        box_to_rect, get_bounds_of_boxes, get_rects_overlapping_area, internal_node_to_box,
+        node_to_box,
+    },
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -31,7 +32,11 @@ impl ConnectionMode {
     }
 }
 
-pub fn get_outgoers<'a, S>(node_id: &str, nodes: &'a [Node<S>], edges: &[Edge]) -> Vec<&'a Node<S>> {
+pub fn get_outgoers<'a, S>(
+    node_id: &str,
+    nodes: &'a [Node<S>],
+    edges: &[Edge],
+) -> Vec<&'a Node<S>> {
     if node_id.is_empty() {
         return Vec::new();
     }
@@ -46,7 +51,11 @@ pub fn get_outgoers<'a, S>(node_id: &str, nodes: &'a [Node<S>], edges: &[Edge]) 
         .collect()
 }
 
-pub fn get_incomers<'a, S>(node_id: &str, nodes: &'a [Node<S>], edges: &[Edge]) -> Vec<&'a Node<S>> {
+pub fn get_incomers<'a, S>(
+    node_id: &str,
+    nodes: &'a [Node<S>],
+    edges: &[Edge],
+) -> Vec<&'a Node<S>> {
     if node_id.is_empty() {
         return Vec::new();
     }

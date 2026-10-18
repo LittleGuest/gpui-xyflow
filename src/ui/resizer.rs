@@ -1,10 +1,14 @@
-use crate::core::geometry::{Rect, XYPosition};
-use crate::core::xyresizer::{
-    get_dimensions_after_resize, is_handle_position, is_line_position, Boundaries,
-    ControlDirection, ResizeDimensions, ResizeStartValues, RESIZER_HANDLE_POSITIONS,
-    RESIZER_LINE_POSITIONS,
+use crate::{
+    core::{
+        geometry::{Rect, XYPosition},
+        xyresizer::{
+            Boundaries, ControlDirection, RESIZER_HANDLE_POSITIONS, RESIZER_LINE_POSITIONS,
+            ResizeDimensions, ResizeStartValues, get_dimensions_after_resize, is_handle_position,
+            is_line_position,
+        },
+    },
+    ui::theme::FlowTheme,
 };
-use crate::ui::theme::FlowTheme;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ResizeHandleKind {
@@ -97,14 +101,24 @@ fn control_origin(rect: Rect, position: &str, size: f64) -> (f64, f64) {
 
 fn line_bounds(rect: Rect, position: &str, width: f64) -> (f64, f64, f64, f64) {
     match position {
-        "top" => (rect.x + width, rect.y - width / 2.0, rect.width - width * 2.0, width),
+        "top" => (
+            rect.x + width,
+            rect.y - width / 2.0,
+            rect.width - width * 2.0,
+            width,
+        ),
         "bottom" => (
             rect.x + width,
             rect.y + rect.height - width / 2.0,
             rect.width - width * 2.0,
             width,
         ),
-        "left" => (rect.x - width / 2.0, rect.y + width, width, rect.height - width * 2.0),
+        "left" => (
+            rect.x - width / 2.0,
+            rect.y + width,
+            width,
+            rect.height - width * 2.0,
+        ),
         "right" => (
             rect.x + rect.width - width / 2.0,
             rect.y + width,

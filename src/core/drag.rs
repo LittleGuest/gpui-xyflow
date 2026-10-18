@@ -1,14 +1,14 @@
 use std::collections::BTreeMap;
 
-use crate::core::edge::Edge;
-use crate::core::geometry::{CoordinateExtent, Dimensions, NodeOrigin, SnapGrid, Transform, XYPosition};
-use crate::core::node::{
-    InternalNode, Node, NodeDragItem, NodeExtent, NodeLookup,
-};
-use crate::core::store::is_parent_selected;
-use crate::core::utils::{
-    box_to_rect, calc_auto_pan, clamp_position, drag_item_to_box, get_bounds_of_boxes,
-    get_bounds_of_rects, get_node_dimensions, rect_to_box, snap_position,
+use crate::core::{
+    edge::Edge,
+    geometry::{CoordinateExtent, Dimensions, NodeOrigin, SnapGrid, Transform, XYPosition},
+    node::{InternalNode, Node, NodeDragItem, NodeExtent, NodeLookup},
+    store::is_parent_selected,
+    utils::{
+        box_to_rect, calc_auto_pan, clamp_position, drag_item_to_box, get_bounds_of_boxes,
+        get_bounds_of_rects, get_node_dimensions, rect_to_box, snap_position,
+    },
 };
 
 pub struct DragStore {
@@ -90,19 +90,19 @@ pub fn calculate_node_position<S: Clone>(
                 ];
             }
         }
-    } else if parent_node.is_some() {
-        if let Some(NodeExtent::Coordinates(node_extent)) = node.extent {
-            extent = [
-                [
-                    node_extent[0][0] + parent_position.x,
-                    node_extent[0][1] + parent_position.y,
-                ],
-                [
-                    node_extent[1][0] + parent_position.x,
-                    node_extent[1][1] + parent_position.y,
-                ],
-            ];
-        }
+    } else if parent_node.is_some()
+        && let Some(NodeExtent::Coordinates(node_extent)) = node.extent
+    {
+        extent = [
+            [
+                node_extent[0][0] + parent_position.x,
+                node_extent[0][1] + parent_position.y,
+            ],
+            [
+                node_extent[1][0] + parent_position.x,
+                node_extent[1][1] + parent_position.y,
+            ],
+        ];
     }
 
     let dimensions = node.size();
@@ -146,7 +146,10 @@ pub struct UpdateNodesParams<'a> {
     pub store: &'a DragStore,
 }
 
-pub fn update_nodes(params: UpdateNodesParams<'_>, drag_items: &mut BTreeMap<String, NodeDragItem>) -> DragUpdate {
+pub fn update_nodes(
+    params: UpdateNodesParams<'_>,
+    drag_items: &mut BTreeMap<String, NodeDragItem>,
+) -> DragUpdate {
     let store = params.store;
     let is_multi_drag = drag_items.len() > 1;
 
@@ -167,7 +170,12 @@ pub fn update_nodes(params: UpdateNodesParams<'_>, drag_items: &mut BTreeMap<Str
     };
 
     let multi_drag_snap_offset = if is_multi_drag && store.snap_to_grid {
-        calculate_snap_offset(drag_items, store.snap_grid, params.pointer.x, params.pointer.y)
+        calculate_snap_offset(
+            drag_items,
+            store.snap_grid,
+            params.pointer.x,
+            params.pointer.y,
+        )
     } else {
         None
     };
@@ -202,9 +210,11 @@ pub fn update_nodes(params: UpdateNodesParams<'_>, drag_items: &mut BTreeMap<Str
 
         let mut adjusted_extent: Option<CoordinateExtent> = None;
 
-        if is_multi_drag && !item.extent.is_some() && nodes_box.is_some() {
+        if is_multi_drag
+            && item.extent.is_none()
+            && let Some(nodes_box) = nodes_box
+        {
             let node_extent = store.node_extent;
-            let nodes_box = nodes_box.expect("checked");
             let position_absolute = item.position_absolute;
             let dimensions = item.measured;
             let width = dimensions.width.unwrap_or(0.0);
@@ -227,11 +237,8 @@ pub fn update_nodes(params: UpdateNodesParams<'_>, drag_items: &mut BTreeMap<Str
             next_position,
             node_lookup: &store.node_lookup,
             node_origin: store.node_origin,
-            node_extent: adjusted_extent.unwrap_or(
-                store
-                    .node_extent_override
-                    .unwrap_or(store.node_extent),
-            ),
+            node_extent: adjusted_extent
+                .unwrap_or(store.node_extent_override.unwrap_or(store.node_extent)),
         }) else {
             continue;
         };
@@ -244,21 +251,20 @@ pub fn update_nodes(params: UpdateNodesParams<'_>, drag_items: &mut BTreeMap<Str
         item.position_absolute = update.position_absolute;
 
         let node = store.node_lookup.get(&id);
-        if let Some(node) = node {
-            if node.expand_parent {
-                if let Some(parent_id) = &node.parent_id {
-                    parent_expansions.push((
-                        id.clone(),
-                        parent_id.clone(),
-                        crate::core::geometry::Rect::new(
-                            update.position_absolute.x,
-                            update.position_absolute.y,
-                            item.measured.width.unwrap_or(0.0),
-                            item.measured.height.unwrap_or(0.0),
-                        ),
-                    ));
-                }
-            }
+        if let Some(node) = node
+            && node.expand_parent
+            && let Some(parent_id) = &node.parent_id
+        {
+            parent_expansions.push((
+                id.clone(),
+                parent_id.clone(),
+                crate::core::geometry::Rect::new(
+                    update.position_absolute.x,
+                    update.position_absolute.y,
+                    item.measured.width.unwrap_or(0.0),
+                    item.measured.height.unwrap_or(0.0),
+                ),
+            ));
         }
 
         positions.insert(id, update);
@@ -314,7 +320,10 @@ pub fn is_node_within_parent<S: Clone>(node: &InternalNode<S>, parent: &Internal
         && node_pos.y + node_size.height <= parent_pos.y + parent_size.height
 }
 
-pub fn expand_bounds_to_include(parent: crate::core::geometry::Rect, child: crate::core::geometry::Rect) -> crate::core::geometry::Rect {
+pub fn expand_bounds_to_include(
+    parent: crate::core::geometry::Rect,
+    child: crate::core::geometry::Rect,
+) -> crate::core::geometry::Rect {
     get_bounds_of_rects(parent, child)
 }
 
@@ -361,7 +370,10 @@ pub fn get_event_handler_params<S: Clone>(
     }
 
     let Some(node_id) = node_id else {
-        return (nodes_from_drag_items.first().cloned(), nodes_from_drag_items);
+        return (
+            nodes_from_drag_items.first().cloned(),
+            nodes_from_drag_items,
+        );
     };
 
     let first = match node_lookup.get(node_id) {
@@ -466,15 +478,11 @@ impl XYDrag {
         self.active_node_id.as_deref()
     }
 
-    pub fn can_start(
-        &self,
-        target_classes: &[String],
-        ancestors: &[Vec<String>],
-    ) -> bool {
-        if let Some(class_name) = &self.options.no_drag_class_name {
-            if has_selector(target_classes, class_name, ancestors) {
-                return false;
-            }
+    pub fn can_start(&self, target_classes: &[String], ancestors: &[Vec<String>]) -> bool {
+        if let Some(class_name) = &self.options.no_drag_class_name
+            && has_selector(target_classes, class_name, ancestors)
+        {
+            return false;
         }
         if let Some(selector) = &self.options.handle_selector {
             return has_selector(target_classes, selector, ancestors);
@@ -518,8 +526,7 @@ impl XYDrag {
         }
 
         if let Some(start) = self.press_pointer {
-            let distance =
-                ((pointer.x - start.x).powi(2) + (pointer.y - start.y).powi(2)).sqrt();
+            let distance = ((pointer.x - start.x).powi(2) + (pointer.y - start.y).powi(2)).sqrt();
             if distance < self.options.node_drag_threshold {
                 return DragUpdate::default();
             }
@@ -542,14 +549,10 @@ impl XYDrag {
                     position_absolute: item.position_absolute,
                 },
             );
-            if item.expand_parent {
-                if let Some(parent_id) = item.parent_id.clone() {
-                    parent_expansions.push((
-                        item.id.clone(),
-                        parent_id,
-                        parent_expansion_rect(item),
-                    ));
-                }
+            if item.expand_parent
+                && let Some(parent_id) = item.parent_id.clone()
+            {
+                parent_expansions.push((item.id.clone(), parent_id, parent_expansion_rect(item)));
             }
         }
 

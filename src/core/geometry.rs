@@ -192,10 +192,7 @@ impl Rect {
     }
 
     pub fn contains_point(self, point: XYPosition) -> bool {
-        point.x >= self.x
-            && point.x <= self.max_x()
-            && point.y >= self.y
-            && point.y <= self.max_y()
+        point.x >= self.x && point.x <= self.max_x() && point.y >= self.y && point.y <= self.max_y()
     }
 }
 
@@ -436,22 +433,17 @@ impl PanOnScrollMode {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum PanelPosition {
     TopLeft,
     TopCenter,
     TopRight,
+    #[default]
     BottomLeft,
     BottomCenter,
     BottomRight,
     CenterLeft,
     CenterRight,
-}
-
-impl Default for PanelPosition {
-    fn default() -> Self {
-        PanelPosition::BottomLeft
-    }
 }
 
 impl PanelPosition {
@@ -658,7 +650,7 @@ impl KeyCode {
     }
 
     pub fn matches(&self, pressed: &str) -> bool {
-        self.keys().iter().any(|key| *key == pressed)
+        self.keys().contains(&pressed)
     }
 }
 

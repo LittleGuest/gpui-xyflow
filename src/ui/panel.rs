@@ -35,7 +35,13 @@ impl PanelProps {
         self
     }
 
-    pub fn origin(self, container_width: f64, container_height: f64, width: f64, height: f64) -> (f64, f64) {
+    pub fn origin(
+        self,
+        container_width: f64,
+        container_height: f64,
+        width: f64,
+        height: f64,
+    ) -> (f64, f64) {
         let margin = self.margin;
         let offset = self.offset;
         match self.position {
@@ -59,7 +65,13 @@ impl PanelProps {
         }
     }
 
-    pub fn bounds(self, container_width: f64, container_height: f64, width: f64, height: f64) -> Rect {
+    pub fn bounds(
+        self,
+        container_width: f64,
+        container_height: f64,
+        width: f64,
+        height: f64,
+    ) -> Rect {
         let (x, y) = self.origin(container_width, container_height, width, height);
         Rect::new(x, y, width, height)
     }

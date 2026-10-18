@@ -1,5 +1,7 @@
-use crate::core::geometry::Position;
-use crate::core::node::{Handle, HandleType, Node};
+use crate::core::{
+    geometry::Position,
+    node::{Handle, HandleType, Node},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum BuiltInNodeKind {

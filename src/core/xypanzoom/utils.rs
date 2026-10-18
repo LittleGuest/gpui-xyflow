@@ -1,5 +1,7 @@
-use crate::core::geometry::Viewport;
-use crate::core::panzoom::{transition_ease_cubic_in_out, PanOnDrag};
+use crate::core::{
+    geometry::Viewport,
+    panzoom::{PanOnDrag, transition_ease_cubic_in_out},
+};
 
 pub fn is_wrapped_with_class(classes: &[String], class_name: &str) -> bool {
     if class_name.is_empty() {
@@ -32,8 +34,9 @@ pub fn is_mac_os() -> bool {
     cfg!(target_os = "macos")
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum Ease {
+    #[default]
     CubicInOut,
     Linear,
 }
@@ -47,22 +50,11 @@ impl Ease {
     }
 }
 
-impl Default for Ease {
-    fn default() -> Self {
-        Ease::CubicInOut
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum Interpolate {
+    #[default]
     Zoom,
     Linear,
-}
-
-impl Default for Interpolate {
-    fn default() -> Self {
-        Interpolate::Zoom
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

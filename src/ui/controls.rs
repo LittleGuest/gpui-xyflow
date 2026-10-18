@@ -1,5 +1,4 @@
-use crate::core::geometry::PanelPosition;
-use crate::ui::theme::FlowTheme;
+use crate::{core::geometry::PanelPosition, ui::theme::FlowTheme};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ControlButton {
@@ -110,7 +109,11 @@ pub fn controls_border(theme: &FlowTheme) -> gpui_kit::Rgba {
     theme.controls_border
 }
 
-pub fn controls_button_at(props: &ControlsProps, local_x: f32, local_y: f32) -> Option<ControlButton> {
+pub fn controls_button_at(
+    props: &ControlsProps,
+    local_x: f32,
+    local_y: f32,
+) -> Option<ControlButton> {
     let buttons = props.buttons();
     if buttons.is_empty() {
         return None;

@@ -1,5 +1,7 @@
-use crate::core::edge::{BezierPathOptions, EdgeGraphics, SmoothStepPathOptions, StepPathOptions};
-use crate::core::geometry::{Axis, Position, XYPosition};
+use crate::core::{
+    edge::{BezierPathOptions, EdgeGraphics, SmoothStepPathOptions, StepPathOptions},
+    geometry::{Axis, Position, XYPosition},
+};
 
 pub fn get_edge_center(
     source_x: f64,
@@ -125,8 +127,18 @@ pub fn get_simple_bezier_path(
 ) -> EdgeGraphics {
     let curvature = options.curvature;
     let offset = 0.25 * (target_x - source_x).abs().max(1.0) * curvature.max(0.0);
-    let source_control_x = source_x + if target_x >= source_x { offset } else { -offset };
-    let target_control_x = target_x - if target_x >= source_x { offset } else { -offset };
+    let source_control_x = source_x
+        + if target_x >= source_x {
+            offset
+        } else {
+            -offset
+        };
+    let target_control_x = target_x
+        - if target_x >= source_x {
+            offset
+        } else {
+            -offset
+        };
 
     let (label_x, label_y, offset_x, offset_y) = get_bezier_edge_center(
         source_x,
@@ -345,12 +357,10 @@ fn get_points(
         if source_position != target_position {
             let dir_accessor_opposite = dir_accessor.other();
             let is_same_dir = source_dir_component == component(&target_dir, dir_accessor_opposite);
-            let source_gt_target_oppo =
-                component(&source_gapped, dir_accessor_opposite)
-                    > component(&target_gapped, dir_accessor_opposite);
-            let source_lt_target_oppo =
-                component(&source_gapped, dir_accessor_opposite)
-                    < component(&target_gapped, dir_accessor_opposite);
+            let source_gt_target_oppo = component(&source_gapped, dir_accessor_opposite)
+                > component(&target_gapped, dir_accessor_opposite);
+            let source_lt_target_oppo = component(&source_gapped, dir_accessor_opposite)
+                < component(&target_gapped, dir_accessor_opposite);
             let flip_source_target = (source_dir_component == 1.0
                 && ((!is_same_dir && source_gt_target_oppo)
                     || (is_same_dir && source_lt_target_oppo)))
@@ -409,9 +419,7 @@ fn get_points(
 }
 
 fn get_bend(a: XYPosition, b: XYPosition, c: XYPosition, size: f64) -> String {
-    let bend_size = (distance(a, b) / 2.0)
-        .min(distance(b, c) / 2.0)
-        .min(size);
+    let bend_size = (distance(a, b) / 2.0).min(distance(b, c) / 2.0).min(size);
     let (x, y) = (b.x, b.y);
 
     if (a.x == x && x == c.x) || (a.y == y && y == c.y) {
@@ -444,7 +452,6 @@ fn get_bend(a: XYPosition, b: XYPosition, c: XYPosition, size: f64) -> String {
         y
     )
 }
-
 
 pub fn get_smooth_step_path(
     source_x: f64,

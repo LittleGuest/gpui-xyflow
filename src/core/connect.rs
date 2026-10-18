@@ -1,19 +1,15 @@
-use crate::core::constants::{ADDITIONAL_DISTANCE, DEFAULT_CONNECTION_RADIUS};
-use crate::core::edge::Connection;
-use crate::core::geometry::{Position, Rect, Transform, XYPosition};
-use crate::core::graph::{get_handle_by_id, get_handle_position, ConnectionMode};
-use crate::core::node::{Handle, HandleType, InternalNode, NodeLookup};
-use crate::core::utils::{get_rects_overlapping_area, renderer_point_to_point};
+use crate::core::{
+    constants::{ADDITIONAL_DISTANCE, DEFAULT_CONNECTION_RADIUS},
+    edge::Connection,
+    geometry::{Position, Rect, Transform, XYPosition},
+    graph::{ConnectionMode, get_handle_by_id, get_handle_position},
+    node::{Handle, HandleType, InternalNode, NodeLookup},
+    utils::{get_rects_overlapping_area, renderer_point_to_point},
+};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct NoConnection {
     pub in_progress: bool,
-}
-
-impl Default for NoConnection {
-    fn default() -> Self {
-        NoConnection { in_progress: false }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -102,7 +98,10 @@ impl ConnectionResult {
     }
 }
 
-pub fn is_connection_valid(is_inside_connection_radius: bool, is_handle_valid: bool) -> Option<bool> {
+pub fn is_connection_valid(
+    is_inside_connection_radius: bool,
+    is_handle_valid: bool,
+) -> Option<bool> {
     if is_handle_valid {
         Some(true)
     } else if is_inside_connection_radius {
@@ -112,11 +111,11 @@ pub fn is_connection_valid(is_inside_connection_radius: bool, is_handle_valid: b
     }
 }
 
-fn nodes_within_distance<'a, S: Clone>(
+fn nodes_within_distance<S: Clone>(
     position: XYPosition,
-    node_lookup: &'a NodeLookup<S>,
+    node_lookup: &NodeLookup<S>,
     distance: f64,
-) -> Vec<&'a InternalNode<S>> {
+) -> Vec<&InternalNode<S>> {
     let rect = Rect::new(
         position.x - distance,
         position.y - distance,
@@ -148,7 +147,11 @@ pub fn get_closest_handle<S: Clone>(
     let mut closest: Vec<Handle> = Vec::new();
     let mut min_distance = f64::INFINITY;
 
-    let close_nodes = nodes_within_distance(position, node_lookup, connection_radius + ADDITIONAL_DISTANCE);
+    let close_nodes = nodes_within_distance(
+        position,
+        node_lookup,
+        connection_radius + ADDITIONAL_DISTANCE,
+    );
 
     for node in close_nodes {
         let Some(bounds) = node.internals.handle_bounds.as_ref() else {
@@ -291,7 +294,12 @@ pub fn start_connection<S: Clone>(
     params: StartConnectionParams<'_, S>,
 ) -> Option<ConnectionInProgress<S>> {
     let node = params.node_lookup.get(params.node_id)?;
-    let handle = get_handle_by_id(node, params.handle_type, params.handle_id, params.connection_mode)?;
+    let handle = get_handle_by_id(
+        node,
+        params.handle_type,
+        params.handle_id,
+        params.connection_mode,
+    )?;
     let from = get_handle_position(node, Some(&handle), Position::Left, true);
 
     Some(ConnectionInProgress {
@@ -318,7 +326,9 @@ pub struct UpdateConnectionParams<'a, S> {
     pub node_lookup: &'a NodeLookup<S>,
 }
 
-pub fn update_connection<S: Clone>(params: UpdateConnectionParams<'_, S>) -> ConnectionInProgress<S> {
+pub fn update_connection<S: Clone>(
+    params: UpdateConnectionParams<'_, S>,
+) -> ConnectionInProgress<S> {
     let renderer_pointer = params.transform.invert(params.pointer);
     let closest = get_closest_handle(
         renderer_pointer,
@@ -342,14 +352,15 @@ pub fn update_connection<S: Clone>(params: UpdateConnectionParams<'_, S>) -> Con
     let from = params
         .node_lookup
         .get(&params.state.from_handle.node_id)
-        .map(|node| get_handle_position(node, Some(&params.state.from_handle), Position::Left, true))
+        .map(|node| {
+            get_handle_position(node, Some(&params.state.from_handle), Position::Left, true)
+        })
         .unwrap_or(params.state.from);
 
     let to = match (&result.to_handle, is_valid) {
-        (Some(handle), Some(true)) => renderer_point_to_point(
-            XYPosition::new(handle.x, handle.y),
-            params.transform,
-        ),
+        (Some(handle), Some(true)) => {
+            renderer_point_to_point(XYPosition::new(handle.x, handle.y), params.transform)
+        }
         _ => params.pointer,
     };
 
@@ -390,12 +401,14 @@ pub struct CheckHandleParams<'a, S> {
 }
 
 pub fn check_click_connection<S: Clone>(params: CheckHandleParams<'_, S>) -> ConnectionResult {
-    let handle = params
-        .node_lookup
-        .get(params.node_id)
-        .and_then(|node| {
-            get_handle_by_id(node, params.handle_type, params.handle_id, params.connection_mode)
-        });
+    let handle = params.node_lookup.get(params.node_id).and_then(|node| {
+        get_handle_by_id(
+            node,
+            params.handle_type,
+            params.handle_id,
+            params.connection_mode,
+        )
+    });
 
     let handle = handle.map(|mut handle| {
         if let Some(node) = params.node_lookup.get(params.node_id) {

@@ -1,24 +1,30 @@
-use gpui_xyflow::core::connections::{add_edge, connection_exists, get_edge_id};
-use gpui_xyflow::core::edge::Edge;
-use gpui_xyflow::core::geometry::{Rect, Viewport, XYPosition};
-use gpui_xyflow::core::node::Node;
-use gpui_xyflow::ui::api::{ConnectionApi, FlowHandle, FlowHandleState, NodeDataApi, ViewportApi};
+use gpui_xyflow::{
+    core::{
+        connections::{add_edge, connection_exists, get_edge_id},
+        edge::Edge,
+        geometry::{Rect, Viewport, XYPosition},
+        node::Node,
+    },
+    ui::api::{ConnectionApi, FlowHandle, FlowHandleState, NodeDataApi, ViewportApi},
+};
 
 fn node(id: &str, x: f64, y: f64) -> Node<String> {
-    let mut node = Node::<String>::default();
-    node.id = id.to_string();
-    node.position = XYPosition::new(x, y);
-    node.width = Some(80.0);
-    node.height = Some(40.0);
-    node
+    Node::<String> {
+        id: id.to_string(),
+        position: XYPosition::new(x, y),
+        width: Some(80.0),
+        height: Some(40.0),
+        ..Node::<String>::default()
+    }
 }
 
 fn edge(id: &str, source: &str, target: &str) -> Edge<String> {
-    let mut edge = Edge::<String>::default();
-    edge.id = id.to_string();
-    edge.source = source.to_string();
-    edge.target = target.to_string();
-    edge
+    Edge::<String> {
+        id: id.to_string(),
+        source: source.to_string(),
+        target: target.to_string(),
+        ..Edge::<String>::default()
+    }
 }
 
 #[test]
@@ -138,7 +144,10 @@ fn node_data_api_get_edge_id_by_handles() {
     let mut e = edge("e1", "a", "b");
     e.source_handle = Some("s".to_string());
     let api = NodeDataApi::new(Vec::new(), vec![e]);
-    assert_eq!(api.get_edge_id("a", "b", Some("s"), None).as_deref(), Some("e1"));
+    assert_eq!(
+        api.get_edge_id("a", "b", Some("s"), None).as_deref(),
+        Some("e1")
+    );
     assert!(api.get_edge_id("a", "b", None, None).is_none());
 }
 
@@ -192,7 +201,10 @@ fn flow_handle_reports_selection() {
 #[test]
 fn get_edge_id_matches_official_format() {
     assert_eq!(get_edge_id("a", None, "b", None), "xy-edge__a-b");
-    assert_eq!(get_edge_id("a", Some("s"), "b", Some("t")), "xy-edge__as-bt");
+    assert_eq!(
+        get_edge_id("a", Some("s"), "b", Some("t")),
+        "xy-edge__as-bt"
+    );
 }
 
 #[test]
@@ -229,9 +241,11 @@ fn add_edge_rejects_duplicate() {
 fn add_edge_applies_default_options() {
     let mut e = edge("", "a", "b");
     e.id.clear();
-    let mut defaults = Edge::<String>::default();
-    defaults.edge_type = Some("smoothstep".to_string());
-    defaults.animated = true;
+    let defaults = Edge::<String> {
+        edge_type: Some("smoothstep".to_string()),
+        animated: true,
+        ..Edge::<String>::default()
+    };
     let result = add_edge(e, &[], Some(&defaults)).unwrap();
     assert_eq!(result[0].edge_type.as_deref(), Some("smoothstep"));
     assert!(result[0].animated);
@@ -241,4 +255,51 @@ fn add_edge_applies_default_options() {
 fn handles_of_empty_when_no_bounds() {
     let lookup_node = Node::<String>::default();
     assert!(lookup_node.handles.is_empty());
+}
+
+#[test]
+fn get_intersecting_nodes_finds_overlapping_peers() {
+    let api = NodeDataApi::new(
+        vec![
+            node("a", 0.0, 0.0),
+            node("b", 40.0, 0.0),
+            node("c", 900.0, 900.0),
+        ],
+        vec![],
+    );
+    let target = api.get_node("a").unwrap().clone();
+    let matches = api.get_intersecting_nodes(&target, true, [0.0, 0.0]);
+    let ids: Vec<&str> = matches.iter().map(|n| n.id.as_str()).collect();
+    assert_eq!(ids, vec!["b"]);
+}
+
+#[test]
+fn get_intersecting_nodes_ignores_self() {
+    let api = NodeDataApi::new(vec![node("a", 0.0, 0.0)], vec![]);
+    let target = api.get_node("a").unwrap().clone();
+    assert!(
+        api.get_intersecting_nodes(&target, true, [0.0, 0.0])
+            .is_empty()
+    );
+}
+
+#[test]
+fn node_rect_uses_node_position_without_parent() {
+    let api = NodeDataApi::new(vec![node("a", 10.0, 20.0)], vec![]);
+    let target = api.get_node("a").unwrap().clone();
+    let rect = api.node_rect(&target, [0.0, 0.0]);
+    assert_eq!(rect, Rect::new(10.0, 20.0, 80.0, 40.0));
+}
+
+#[test]
+fn is_node_intersecting_reports_partial_overlap() {
+    let api = NodeDataApi::new(vec![node("a", 0.0, 0.0)], vec![]);
+    let target = api.get_node("a").unwrap().clone();
+    assert!(api.is_node_intersecting(&target, Rect::new(0.0, 0.0, 10.0, 10.0), true, [0.0, 0.0]));
+    assert!(!api.is_node_intersecting(
+        &target,
+        Rect::new(500.0, 500.0, 10.0, 10.0),
+        true,
+        [0.0, 0.0]
+    ));
 }

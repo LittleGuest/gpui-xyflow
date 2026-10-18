@@ -1,21 +1,18 @@
-use std::cell::Cell;
-use std::collections::BTreeMap;
+use std::{cell::Cell, collections::BTreeMap};
 
-use crate::core::change::{NodeChange, NodeDimensionChange, NodePositionChange, SetAttributes};
-use crate::core::constants::{
-    DEFAULT_NODE_ORIGIN, INFINITE_EXTENT, ROOT_PARENT_Z_INCREMENT, SELECTED_NODE_Z,
-};
-use crate::core::geometry::{
-    CoordinateExtent, Dimensions, NodeOrigin, Rect, XYPosition, ZIndexMode,
-};
-use crate::core::node::{
-    bounds_from_handles, Handle, HandleType, InternalNode, Node, NodeDragItem, NodeHandleBounds,
-    NodeLookup, ParentLookup,
-};
-use crate::core::utils::{
-    box_to_rect, clamp_position, clamp_position_to_parent, get_bounds_of_boxes,
-    get_bounds_of_rects, get_node_dimensions, get_rects_overlapping_area, internal_node_to_box,
-    is_numeric, node_to_rect,
+use crate::core::{
+    change::{NodeChange, NodeDimensionChange, NodePositionChange, SetAttributes},
+    constants::{DEFAULT_NODE_ORIGIN, INFINITE_EXTENT, ROOT_PARENT_Z_INCREMENT, SELECTED_NODE_Z},
+    geometry::{CoordinateExtent, Dimensions, NodeOrigin, Rect, XYPosition, ZIndexMode},
+    node::{
+        Handle, HandleType, InternalNode, Node, NodeDragItem, NodeHandleBounds, NodeLookup,
+        ParentLookup, bounds_from_handles,
+    },
+    utils::{
+        box_to_rect, clamp_position, clamp_position_to_parent, get_bounds_of_boxes,
+        get_bounds_of_rects, get_node_dimensions, get_rects_overlapping_area, internal_node_to_box,
+        is_numeric, node_to_rect,
+    },
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -69,7 +66,11 @@ pub fn parse_handles<S: Clone>(
     Some(bounds)
 }
 
-pub fn calculate_z<S: Clone>(node: &Node<S>, selected_node_z: f64, z_index_mode: ZIndexMode) -> f64 {
+pub fn calculate_z<S: Clone>(
+    node: &Node<S>,
+    selected_node_z: f64,
+    z_index_mode: ZIndexMode,
+) -> f64 {
     let z_index = node
         .z_index
         .filter(|value| is_numeric(*value))
@@ -117,11 +118,8 @@ pub fn adopt_user_nodes<S: Clone + PartialEq>(
                 .extent
                 .and_then(|extent| extent.coordinates())
                 .unwrap_or(options.node_extent);
-            let clamped = clamp_position(
-                position_with_origin,
-                extent,
-                get_node_dimensions(user_node),
-            );
+            let clamped =
+                clamp_position(position_with_origin, extent, get_node_dimensions(user_node));
             let handle_bounds = parse_handles(user_node, existing);
             let z = calculate_z(user_node, selected_node_z, options.z_index_mode);
             let internal =
@@ -129,10 +127,11 @@ pub fn adopt_user_nodes<S: Clone + PartialEq>(
             node_lookup.insert(user_node.id.clone(), internal);
         }
 
-        if let Some(internal) = node_lookup.get(&user_node.id) {
-            if !internal.measured.is_measured() && !internal.hidden {
-                nodes_initialized = false;
-            }
+        if let Some(internal) = node_lookup.get(&user_node.id)
+            && !internal.measured.is_measured()
+            && !internal.hidden
+        {
+            nodes_initialized = false;
         }
 
         if user_node.parent_id.is_some() {
@@ -239,10 +238,7 @@ fn update_child_node<S: Clone>(
         0.0
     };
 
-    let parent_node = node_lookup
-        .get(&parent_id)
-        .cloned()
-        .unwrap_or(parent_node);
+    let parent_node = node_lookup.get(&parent_id).cloned().unwrap_or(parent_node);
     let (x, y, z) = calculate_child_xyz(
         &node,
         &parent_node,
@@ -256,11 +252,9 @@ fn update_child_node<S: Clone>(
         || y != node.internals.position_absolute.y
         || z != node.internals.z;
 
-    if changed {
-        if let Some(node) = node_lookup.get_mut(&id) {
-            node.internals.position_absolute = XYPosition::new(x, y);
-            node.internals.z = z;
-        }
+    if changed && let Some(node) = node_lookup.get_mut(&id) {
+        node.internals.position_absolute = XYPosition::new(x, y);
+        node.internals.z = z;
     }
 }
 
@@ -477,7 +471,8 @@ pub fn update_node_internals<S: Clone>(
                 .and_then(|id| node_lookup.get(id))
                 .cloned()
             {
-                position_absolute = clamp_position_to_parent(position_absolute, dimensions, &parent);
+                position_absolute =
+                    clamp_position_to_parent(position_absolute, dimensions, &parent);
             }
         } else {
             position_absolute = clamp_position(position_absolute, extent, dimensions);
@@ -489,7 +484,8 @@ pub fn update_node_internals<S: Clone>(
             .or_else(|| node.internals.handle_bounds.clone());
 
         let mut next = node.clone();
-        next.measured = crate::core::node::MeasuredDimensions::new(dimensions.width, dimensions.height);
+        next.measured =
+            crate::core::node::MeasuredDimensions::new(dimensions.width, dimensions.height);
         next.internals.position_absolute = position_absolute;
         next.internals.handle_bounds = handle_bounds;
         node_lookup.insert(update.id.clone(), next.clone());
@@ -508,11 +504,11 @@ pub fn update_node_internals<S: Clone>(
                 set_attributes: None,
             }));
 
-            if next.expand_parent {
-                if let Some(parent_id) = next.parent_id.clone() {
-                    let rect = node_to_rect(&next.internals.user_node, options.node_origin);
-                    parent_expand_children.push((next.id.clone(), parent_id, rect));
-                }
+            if next.expand_parent
+                && let Some(parent_id) = next.parent_id.clone()
+            {
+                let rect = node_to_rect(&next.internals.user_node, options.node_origin);
+                parent_expand_children.push((next.id.clone(), parent_id, rect));
             }
         }
     }

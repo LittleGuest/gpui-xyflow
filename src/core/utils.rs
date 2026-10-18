@@ -1,8 +1,10 @@
-use crate::core::geometry::{
-    Box2, CoordinateExtent, Dimensions, NodeOrigin, Padding, PaddingWithUnit, Rect, SnapGrid,
-    Transform, Viewport, XYPosition,
+use crate::core::{
+    geometry::{
+        Box2, CoordinateExtent, Dimensions, NodeOrigin, Padding, PaddingWithUnit, Rect, SnapGrid,
+        Transform, Viewport, XYPosition,
+    },
+    node::{InternalNode, Node, NodeDragItem, NodeLookup},
 };
-use crate::core::node::{InternalNode, Node, NodeDragItem, NodeLookup};
 
 pub fn clamp(value: f64, min: f64, max: f64) -> f64 {
     value.min(max).max(min)
@@ -218,32 +220,34 @@ pub fn parse_paddings(padding: Padding, width: f64, height: f64) -> ResolvedPadd
         return ResolvedPadding::default();
     }
 
-    if padding.top.is_none() && padding.bottom.is_none() {
-        if let Some(value) = padding.x {
-            let padding_x = parse_padding(value, width);
-            return ResolvedPadding {
-                top: 0.0,
-                right: padding_x,
-                bottom: 0.0,
-                left: padding_x,
-                x: padding_x * 2.0,
-                y: 0.0,
-            };
-        }
+    if padding.top.is_none()
+        && padding.bottom.is_none()
+        && let Some(value) = padding.x
+    {
+        let padding_x = parse_padding(value, width);
+        return ResolvedPadding {
+            top: 0.0,
+            right: padding_x,
+            bottom: 0.0,
+            left: padding_x,
+            x: padding_x * 2.0,
+            y: 0.0,
+        };
     }
 
-    if padding.left.is_none() && padding.right.is_none() {
-        if let Some(value) = padding.y {
-            let padding_y = parse_padding(value, height);
-            return ResolvedPadding {
-                top: padding_y,
-                right: 0.0,
-                bottom: padding_y,
-                left: 0.0,
-                x: 0.0,
-                y: padding_y * 2.0,
-            };
-        }
+    if padding.left.is_none()
+        && padding.right.is_none()
+        && let Some(value) = padding.y
+    {
+        let padding_y = parse_padding(value, height);
+        return ResolvedPadding {
+            top: padding_y,
+            right: 0.0,
+            bottom: padding_y,
+            left: 0.0,
+            x: 0.0,
+            y: padding_y * 2.0,
+        };
     }
 
     let zero = PaddingWithUnit::Number(0.0);

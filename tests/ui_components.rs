@@ -1,15 +1,22 @@
-use gpui_xyflow::core::edge::{BezierPathOptions, EdgeMarker, EdgeMarkerType, PathOptions};
-use gpui_xyflow::core::geometry::Position;
-use gpui_xyflow::core::node::{HandleType, Node};
-use gpui_xyflow::ui::edges::{
-    base_edge, bezier_edge_path, default_edge_interaction_width, edge_component_output,
-    edge_center_for, edge_markers, marker_ref, simple_bezier_edge_path, smooth_step_edge_path,
-    step_edge_path, straight_edge_path, BaseEdgeProps, EdgeComponentKind, EdgeLabelStyle,
-    EdgePathParams,
-};
-use gpui_xyflow::ui::nodes::{
-    built_in_node_output, default_node_handles, group_node_handles, input_node_handles,
-    node_handles_for, node_label_default, output_node_handles, BuiltInNodeKind, NodeProps,
+use gpui_xyflow::{
+    core::{
+        edge::{BezierPathOptions, EdgeMarkerType, PathOptions},
+        geometry::Position,
+        node::{HandleType, Node},
+    },
+    ui::{
+        edges::{
+            BaseEdgeProps, EdgeComponentKind, EdgeLabelStyle, EdgePathParams, base_edge,
+            bezier_edge_path, default_edge_interaction_width, edge_center_for,
+            edge_component_output, edge_markers, marker_ref, simple_bezier_edge_path,
+            smooth_step_edge_path, step_edge_path, straight_edge_path,
+        },
+        nodes::{
+            BuiltInNodeKind, NodeProps, built_in_node_output, default_node_handles,
+            group_node_handles, input_node_handles, node_handles_for, node_label_default,
+            output_node_handles,
+        },
+    },
 };
 
 fn params() -> EdgePathParams {
@@ -226,7 +233,10 @@ fn node_kind_roundtrip() {
     ] {
         assert_eq!(BuiltInNodeKind::from_str(kind.as_str()), kind);
     }
-    assert_eq!(BuiltInNodeKind::from_str("nonsense"), BuiltInNodeKind::Default);
+    assert_eq!(
+        BuiltInNodeKind::from_str("nonsense"),
+        BuiltInNodeKind::Default
+    );
 }
 
 #[test]
@@ -276,22 +286,28 @@ fn group_node_has_no_handles() {
 fn built_in_node_output_dispatches() {
     let props = NodeProps::<String>::default();
     assert_eq!(
-        built_in_node_output(BuiltInNodeKind::Group, &props).handles.len(),
+        built_in_node_output(BuiltInNodeKind::Group, &props)
+            .handles
+            .len(),
         0
     );
     assert_eq!(
-        built_in_node_output(BuiltInNodeKind::Default, &props).handles.len(),
+        built_in_node_output(BuiltInNodeKind::Default, &props)
+            .handles
+            .len(),
         2
     );
 }
 
 #[test]
 fn node_props_from_node_reads_fields() {
-    let mut node = Node::<String>::default();
-    node.id = "n1".to_string();
-    node.node_type = Some("input".to_string());
-    node.source_position = Some(Position::Right);
-    node.connectable = Some(false);
+    let node = Node::<String> {
+        id: "n1".to_string(),
+        node_type: Some("input".to_string()),
+        source_position: Some(Position::Right),
+        connectable: Some(false),
+        ..Node::<String>::default()
+    };
     let props = NodeProps::from_node(&node, Some("Hello".to_string()));
     assert_eq!(props.id, "n1");
     assert_eq!(props.label.as_deref(), Some("Hello"));
@@ -301,9 +317,11 @@ fn node_props_from_node_reads_fields() {
 
 #[test]
 fn node_handles_for_uses_node_type() {
-    let mut node = Node::<String>::default();
-    node.id = "n1".to_string();
-    node.node_type = Some("output".to_string());
+    let node = Node::<String> {
+        id: "n1".to_string(),
+        node_type: Some("output".to_string()),
+        ..Node::<String>::default()
+    };
     let handles = node_handles_for(&node, None);
     assert_eq!(handles.len(), 1);
     assert_eq!(handles[0].handle_type, HandleType::Target);
@@ -312,8 +330,10 @@ fn node_handles_for_uses_node_type() {
 
 #[test]
 fn node_label_default_skips_default_type() {
-    let mut node = Node::<String>::default();
-    node.node_type = Some("default".to_string());
+    let mut node = Node::<String> {
+        node_type: Some("default".to_string()),
+        ..Node::<String>::default()
+    };
     assert!(node_label_default(&node).is_none());
     node.node_type = Some("input".to_string());
     assert_eq!(node_label_default(&node).as_deref(), Some("input"));
@@ -321,8 +341,10 @@ fn node_label_default_skips_default_type() {
 
 #[test]
 fn group_node_produces_no_handles_via_helper() {
-    let mut node = Node::<String>::default();
-    node.id = "g".to_string();
-    node.node_type = Some("group".to_string());
+    let node = Node::<String> {
+        id: "g".to_string(),
+        node_type: Some("group".to_string()),
+        ..Node::<String>::default()
+    };
     assert!(node_handles_for(&node, None).is_empty());
 }

@@ -1,10 +1,14 @@
-use crate::core::edge::{
-    Edge, EdgeGraphics, ConnectionLineType, DEFAULT_EDGE_STROKE_WIDTH, DEFAULT_INTERACTION_WIDTH,
+use crate::{
+    core::{
+        edge::{
+            ConnectionLineType, DEFAULT_EDGE_STROKE_WIDTH, DEFAULT_INTERACTION_WIDTH, Edge,
+            EdgeGraphics,
+        },
+        edge_path::get_edge_path,
+        geometry::{EdgePosition, XYPosition},
+    },
+    ui::{marker::MarkerSet, theme::FlowTheme},
 };
-use crate::core::geometry::{EdgePosition, XYPosition};
-use crate::core::edge_path::get_edge_path;
-use crate::ui::marker::MarkerSet;
-use crate::ui::theme::FlowTheme;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct EdgeShape {
@@ -37,9 +41,7 @@ impl EdgeShape {
             animated: edge.animated,
             label: edge.label.clone(),
             stroke_width: DEFAULT_EDGE_STROKE_WIDTH as f32,
-            interaction_width: edge
-                .interaction_width
-                .unwrap_or(DEFAULT_INTERACTION_WIDTH) as f32,
+            interaction_width: edge.interaction_width.unwrap_or(DEFAULT_INTERACTION_WIDTH) as f32,
             markers: MarkerSet::from_markers(edge.marker_start.as_ref(), edge.marker_end.as_ref()),
         }
     }
@@ -57,11 +59,7 @@ impl EdgeShape {
     }
 }
 
-pub fn edge_shape_for<S: Clone>(
-    edge: &Edge<S>,
-    position: &EdgePosition,
-    z: f64,
-) -> EdgeShape {
+pub fn edge_shape_for<S: Clone>(edge: &Edge<S>, position: &EdgePosition, z: f64) -> EdgeShape {
     let edge_type = edge
         .edge_type
         .clone()
@@ -155,7 +153,7 @@ pub fn point_near_segment(
         return distance <= tolerance;
     }
     let mut t = ((point.x - start.x) * dx + (point.y - start.y) * dy) / length_squared;
-    t = t.max(0.0).min(1.0);
+    t = t.clamp(0.0, 1.0);
     let closest_x = start.x + t * dx;
     let closest_y = start.y + t * dy;
     let distance = ((point.x - closest_x).powi(2) + (point.y - closest_y).powi(2)).sqrt();

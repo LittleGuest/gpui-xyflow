@@ -1,20 +1,17 @@
-use crate::core::constants::{INFINITE_EXTENT, ZOOM_IN_FACTOR, ZOOM_OUT_FACTOR};
-use crate::core::geometry::{
-    CoordinateExtent, Dimensions, PanOnScrollMode, Rect, Transform, Viewport, XYPosition,
+use crate::core::{
+    constants::{INFINITE_EXTENT, ZOOM_IN_FACTOR, ZOOM_OUT_FACTOR},
+    geometry::{
+        CoordinateExtent, Dimensions, PanOnScrollMode, Rect, Transform, Viewport, XYPosition,
+    },
+    utils::{clamp, is_numeric},
 };
-use crate::core::utils::{clamp, is_numeric};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum PanOnDrag {
     Disabled,
+    #[default]
     Enabled,
     Buttons(Vec<u32>),
-}
-
-impl Default for PanOnDrag {
-    fn default() -> Self {
-        PanOnDrag::Enabled
-    }
 }
 
 impl PanOnDrag {
@@ -362,8 +359,8 @@ impl PanZoom {
         point: Option<XYPosition>,
     ) -> (Transform, Vec<PanZoomEvent>) {
         let current = self.transform;
-        let p0 =
-            point.unwrap_or_else(|| XYPosition::new(self.extent.width / 2.0, self.extent.height / 2.0));
+        let p0 = point
+            .unwrap_or_else(|| XYPosition::new(self.extent.width / 2.0, self.extent.height / 2.0));
         let p1 = current.invert(p0);
         let scaled = scale_transform(current, zoom, self.scale_extent());
         let translated = translate_transform(scaled, p0, p1);
@@ -480,7 +477,8 @@ impl PanZoom {
                 delta_y * normalize
             };
 
-            if !is_mac && shift_key && self.options.pan_on_scroll_mode != PanOnScrollMode::Vertical {
+            if !is_mac && shift_key && self.options.pan_on_scroll_mode != PanOnScrollMode::Vertical
+            {
                 delta_x = delta_y * normalize;
                 delta_yv = 0.0;
             }

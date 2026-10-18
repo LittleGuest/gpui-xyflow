@@ -1,20 +1,21 @@
 use std::collections::BTreeMap;
 
-use gpui_xyflow::core::drag::{
-    get_event_handler_params, has_selector, DragPhase, XYDrag, XYDragOptions,
+use gpui_xyflow::core::{
+    drag::{DragPhase, XYDrag, XYDragOptions, get_event_handler_params, has_selector},
+    geometry::{XYPosition, ZIndexMode},
+    node::{Node, NodeDragItem, NodeLookup},
+    store::{AdoptOptions, adopt_user_nodes},
 };
-use gpui_xyflow::core::geometry::{XYPosition, ZIndexMode};
-use gpui_xyflow::core::node::{Node, NodeDragItem, NodeLookup};
-use gpui_xyflow::core::store::{adopt_user_nodes, AdoptOptions};
 
 fn node(id: &str, x: f64, y: f64, selected: bool) -> Node<String> {
-    let mut node = Node::<String>::default();
-    node.id = id.to_string();
-    node.position = XYPosition::new(x, y);
-    node.width = Some(80.0);
-    node.height = Some(40.0);
-    node.selected = selected;
-    node
+    Node::<String> {
+        id: id.to_string(),
+        position: XYPosition::new(x, y),
+        width: Some(80.0),
+        height: Some(40.0),
+        selected,
+        ..Node::<String>::default()
+    }
 }
 
 fn lookup(nodes: Vec<Node<String>>) -> NodeLookup<String> {
@@ -163,8 +164,10 @@ fn xydrag_cancel_resets() {
 
 #[test]
 fn xydrag_respects_nodrag_class() {
-    let mut options = XYDragOptions::default();
-    options.no_drag_class_name = Some("nodrag".to_string());
+    let options = XYDragOptions {
+        no_drag_class_name: Some("nodrag".to_string()),
+        ..XYDragOptions::default()
+    };
     let drag = XYDrag::new(options);
     assert!(!drag.can_start(&["nodrag".to_string()], &[]));
     assert!(drag.can_start(&["other".to_string()], &[]));
@@ -172,8 +175,10 @@ fn xydrag_respects_nodrag_class() {
 
 #[test]
 fn xydrag_respects_handle_selector() {
-    let mut options = XYDragOptions::default();
-    options.handle_selector = Some(".drag-handle".to_string());
+    let options = XYDragOptions {
+        handle_selector: Some(".drag-handle".to_string()),
+        ..XYDragOptions::default()
+    };
     let drag = XYDrag::new(options);
     assert!(drag.can_start(&["drag-handle".to_string()], &[]));
     assert!(!drag.can_start(&["other".to_string()], &[]));

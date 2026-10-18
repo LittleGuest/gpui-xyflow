@@ -1,11 +1,13 @@
 use std::collections::BTreeMap;
 
-use crate::core::edge::Edge;
-use crate::core::geometry::{CoordinateExtent, Rect, Transform, Viewport, XYPosition};
-use crate::core::connections::get_edge_id;
-use crate::core::graph::get_connected_edges;
-use crate::core::node::{Handle, HandleType, InternalNode, Node};
-use crate::core::utils::get_viewport_for_bounds;
+use crate::core::{
+    connections::get_edge_id,
+    edge::Edge,
+    geometry::{CoordinateExtent, Rect, Transform, Viewport, XYPosition},
+    graph::get_connected_edges,
+    node::{Handle, HandleType, InternalNode, Node},
+    utils::get_viewport_for_bounds,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FlowHandleState<S = String> {
@@ -158,7 +160,10 @@ impl ViewportApi {
         if rects.is_empty() {
             return;
         }
-        self.fit_bounds(crate::core::utils::get_bounds_of_rect_slice(&rects), padding);
+        self.fit_bounds(
+            crate::core::utils::get_bounds_of_rect_slice(&rects),
+            padding,
+        );
     }
 
     pub fn get_zoom(&self) -> f64 {
@@ -198,7 +203,9 @@ impl<S: Clone> NodeDataApi<S> {
     pub fn state(&self) -> &FlowHandleState<S> {
         &self.state
     }
+}
 
+impl<S: Clone + PartialEq> NodeDataApi<S> {
     pub fn get_nodes(&self) -> &[Node<S>] {
         &self.state.nodes
     }
@@ -215,7 +222,13 @@ impl<S: Clone> NodeDataApi<S> {
         self.state.edge(id)
     }
 
-    pub fn get_edge_id(&self, source: &str, target: &str, source_handle: Option<&str>, target_handle: Option<&str>) -> Option<String> {
+    pub fn get_edge_id(
+        &self,
+        source: &str,
+        target: &str,
+        source_handle: Option<&str>,
+        target_handle: Option<&str>,
+    ) -> Option<String> {
         self.state
             .edges
             .iter()
@@ -243,7 +256,11 @@ impl<S: Clone> NodeDataApi<S> {
             .collect()
     }
 
-    pub fn get_handle_connections(&self, node_id: &str, handle_id: Option<&str>) -> Vec<ConnectionInfo> {
+    pub fn get_handle_connections(
+        &self,
+        node_id: &str,
+        handle_id: Option<&str>,
+    ) -> Vec<ConnectionInfo> {
         self.state
             .edges
             .iter()
@@ -272,6 +289,84 @@ impl<S: Clone> NodeDataApi<S> {
             }
         }
         ids
+    }
+
+    pub fn node_rect(
+        &self,
+        node: &Node<S>,
+        node_origin: crate::core::geometry::NodeOrigin,
+    ) -> crate::core::geometry::Rect {
+        let lookup = self.build_lookup(node_origin);
+        if let Some(parent_id) = &node.parent_id {
+            let position = crate::core::utils::evaluate_absolute_position(
+                node.position,
+                node.size(),
+                parent_id,
+                &lookup,
+                node_origin,
+            );
+            crate::core::utils_extra::get_node_rect_with_position(node, position)
+        } else {
+            crate::core::utils_extra::get_node_rect_with_position(node, node.position)
+        }
+    }
+
+    fn build_lookup(
+        &self,
+        node_origin: crate::core::geometry::NodeOrigin,
+    ) -> crate::core::node::NodeLookup<S> {
+        let mut lookup = crate::core::node::NodeLookup::new();
+        let mut parent_lookup = crate::core::node::ParentLookup::new();
+        let options = crate::core::store::AdoptOptions {
+            node_origin,
+            ..Default::default()
+        };
+        crate::core::store::adopt_user_nodes(
+            &self.state.nodes,
+            &mut lookup,
+            &mut parent_lookup,
+            &options,
+        );
+        lookup
+    }
+
+    pub fn get_intersecting_nodes(
+        &self,
+        target: &Node<S>,
+        partially: bool,
+        node_origin: crate::core::geometry::NodeOrigin,
+    ) -> Vec<Node<S>> {
+        let rect = self.node_rect(target, node_origin);
+        let lookup = self.build_lookup(node_origin);
+        let internals: Vec<crate::core::node::InternalNode<S>> = lookup.values().cloned().collect();
+
+        let matches = crate::core::utils_extra::get_nodes_intersecting_rect(
+            &internals,
+            rect,
+            partially,
+            Some(&target.id),
+        );
+        let ids: Vec<String> = matches.into_iter().map(|node| node.id.clone()).collect();
+        self.state
+            .nodes
+            .iter()
+            .filter(|node| ids.contains(&node.id))
+            .cloned()
+            .collect()
+    }
+
+    pub fn is_node_intersecting(
+        &self,
+        target: &Node<S>,
+        area: crate::core::geometry::Rect,
+        partially: bool,
+        node_origin: crate::core::geometry::NodeOrigin,
+    ) -> bool {
+        let lookup = self.build_lookup(node_origin);
+        match lookup.get(&target.id) {
+            Some(node) => crate::core::utils_extra::is_node_intersecting(node, area, partially),
+            None => false,
+        }
     }
 
     pub fn update_node_data<F>(&mut self, id: &str, update: F) -> bool
@@ -420,7 +515,13 @@ impl<S: Clone> Default for FlowHandle<S> {
 }
 
 impl<S: Clone> FlowHandle<S> {
-    pub fn new(nodes: Vec<Node<S>>, edges: Vec<Edge<S>>, viewport: Viewport, width: f64, height: f64) -> Self {
+    pub fn new(
+        nodes: Vec<Node<S>>,
+        edges: Vec<Edge<S>>,
+        viewport: Viewport,
+        width: f64,
+        height: f64,
+    ) -> Self {
         let state = FlowHandleState {
             nodes: nodes.clone(),
             edges: edges.clone(),
@@ -443,7 +544,11 @@ impl<S: Clone> FlowHandle<S> {
         self.state
             .nodes
             .iter()
-            .flat_map(|node| node.handles.iter().map(|handle| handle.id.clone().unwrap_or_default()))
+            .flat_map(|node| {
+                node.handles
+                    .iter()
+                    .map(|handle| handle.id.clone().unwrap_or_default())
+            })
             .filter(|id| !id.is_empty())
             .collect()
     }

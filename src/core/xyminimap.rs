@@ -1,8 +1,8 @@
-use crate::core::geometry::{
-    CoordinateExtent, Rect, Transform, Viewport, XYPosition,
+use crate::core::{
+    geometry::{CoordinateExtent, Rect, Transform, Viewport, XYPosition},
+    node::{InternalNode, NodeLookup},
+    utils::get_bounds_of_rect_slice,
 };
-use crate::core::node::{InternalNode, NodeLookup};
-use crate::core::utils::get_bounds_of_rect_slice;
 
 pub const DEFAULT_MINIMAP_WIDTH: f64 = 200.0;
 pub const DEFAULT_MINIMAP_HEIGHT: f64 = 150.0;
@@ -225,7 +225,8 @@ pub fn minimap_pan(
     view_scale: f64,
     inverse_pan: bool,
 ) -> Viewport {
-    let move_scale = view_scale * viewport.zoom.max(viewport.zoom.ln()) * if inverse_pan { -1.0 } else { 1.0 };
+    let move_scale =
+        view_scale * viewport.zoom.max(viewport.zoom.ln()) * if inverse_pan { -1.0 } else { 1.0 };
 
     Viewport::new(
         viewport.x - pointer_delta.x * move_scale,
@@ -357,7 +358,13 @@ impl XYMinimap {
         self.config.scale_extent = (min_zoom, max_zoom);
     }
 
-    pub fn wheel(&mut self, viewport: Viewport, delta_y: f64, ctrl_key: bool, is_mac_os: bool) -> Option<Viewport> {
+    pub fn wheel(
+        &mut self,
+        viewport: Viewport,
+        delta_y: f64,
+        ctrl_key: bool,
+        is_mac_os: bool,
+    ) -> Option<Viewport> {
         if self.config.destroyed || !self.config.update.zoomable {
             return None;
         }
@@ -383,7 +390,12 @@ impl XYMinimap {
         self.config.pointer = Some(pointer);
     }
 
-    pub fn pan_move(&mut self, viewport: Viewport, pointer: XYPosition, view_scale: f64) -> Option<MinimapPanResult> {
+    pub fn pan_move(
+        &mut self,
+        viewport: Viewport,
+        pointer: XYPosition,
+        view_scale: f64,
+    ) -> Option<MinimapPanResult> {
         if self.config.destroyed || self.config.phase != MinimapPhase::Panning {
             return None;
         }
