@@ -1,20 +1,73 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use crate::core::change::{EdgeChange, NodeChange};
-use crate::core::edge::Edge;
+use crate::core::edge::{Edge, EdgeLookup};
 use crate::core::geometry::{
-    ConnectionMode, CoordinateExtent, Dimensions, NodeOrigin, Rect, SnapGrid, Transform, Viewport,
-    XYPosition,
+    CoordinateExtent, Dimensions, EdgePosition, NodeOrigin, Rect, SnapGrid, Transform, Viewport,
+    XYPosition, ZIndexMode,
 };
-use crate::core::graph::{get_edge_position, EdgePositionParams};
-use crate::core::node::{InternalNode, Node, NodeHandleBounds, NodeLookup, ParentLookup};
+use crate::core::graph::ConnectionMode;
+use crate::core::graph::{get_edge_position, get_nodes_inside, EdgePositionParams};
+use crate::core::node::{InternalNode, Node, NodeLookup, ParentLookup};
 use crate::core::store::{
-    adopt_user_nodes, handle_expand_parent, update_absolute_positions, update_node_internals,
-    AdoptOptions, NodeInternalsResult, NodeInternalsUpdate, ParentExpandChild,
+    adopt_user_nodes, AdoptOptions, AdoptResult, NodeInternalsResult, NodeInternalsUpdate,
 };
-use crate::core::utils::{get_internal_nodes_bounds, get_internal_nodes_bounds_filtered};
+use crate::core::utils::{
+    get_bounds_of_box_list, get_viewport_for_bounds, internal_node_to_box, parse_paddings,
+};
 
-use crate::ui::connections::{ConnectionLookup, ConnectionState};
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ViewportSize {
+    pub width: f64,
+    pub height: f64,
+}
+
+impl ViewportSize {
+    pub fn new(width: f64, height: f64) -> Self {
+        ViewportSize { width, height }
+    }
+
+    pub fn dimensions(self) -> Dimensions {
+        Dimensions::new(self.width, self.height)
+    }
+
+    pub fn rect(self) -> Rect {
+        Rect::new(0.0, 0.0, self.width, self.height)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ConnectionViewState {
+    pub in_progress: bool,
+    pub is_valid: Option<bool>,
+    pub from: XYPosition,
+    pub from_node: Option<String>,
+    pub from_handle: Option<String>,
+    pub from_position: Option<crate::core::geometry::Position>,
+    pub to: XYPosition,
+    pub to_node: Option<String>,
+    pub to_handle: Option<String>,
+    pub to_position: Option<crate::core::geometry::Position>,
+    pub pointer: XYPosition,
+}
+
+impl Default for ConnectionViewState {
+    fn default() -> Self {
+        ConnectionViewState {
+            in_progress: false,
+            is_valid: None,
+            from: XYPosition::ZERO,
+            from_node: None,
+            from_handle: None,
+            from_position: None,
+            to: XYPosition::ZERO,
+            to_node: None,
+            to_handle: None,
+            to_position: None,
+            pointer: XYPosition::ZERO,
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FlowStore<NodeType = String, EdgeType = String> {
@@ -22,9 +75,8 @@ pub struct FlowStore<NodeType = String, EdgeType = String> {
     pub nodes: Vec<Node<NodeType>>,
     pub edges: Vec<Edge<EdgeType>>,
     pub node_lookup: NodeLookup<NodeType>,
-    pub edge_lookup: BTreeMap<String, Edge<EdgeType>>,
+    pub edge_lookup: EdgeLookup<EdgeType>,
     pub parent_lookup: ParentLookup<NodeType>,
-    pub connection_lookup: ConnectionLookup,
     pub transform: Transform,
     pub width: f64,
     pub height: f64,
@@ -33,6 +85,7 @@ pub struct FlowStore<NodeType = String, EdgeType = String> {
     pub translate_extent: CoordinateExtent,
     pub node_extent: CoordinateExtent,
     pub node_origin: NodeOrigin,
+    pub z_index_mode: ZIndexMode,
     pub snap_grid: SnapGrid,
     pub snap_to_grid: bool,
     pub connection_mode: ConnectionMode,
@@ -60,8 +113,7 @@ pub struct FlowStore<NodeType = String, EdgeType = String> {
     pub user_selection_active: bool,
     pub user_selection_rect: Option<Rect>,
     pub pane_dragging: bool,
-    pub connection: ConnectionState,
-    pub aria_live_message: String,
+    pub connection: ConnectionViewState,
 }
 
 impl<NodeType: Clone, EdgeType: Clone> Default for FlowStore<NodeType, EdgeType> {
@@ -70,10 +122,9 @@ impl<NodeType: Clone, EdgeType: Clone> Default for FlowStore<NodeType, EdgeType>
             rf_id: "1".to_string(),
             nodes: Vec::new(),
             edges: Vec::new(),
-            node_lookup: BTreeMap::new(),
-            edge_lookup: BTreeMap::new(),
-            parent_lookup: BTreeMap::new(),
-            connection_lookup: ConnectionLookup::new(),
+            node_lookup: NodeLookup::default(),
+            edge_lookup: EdgeLookup::default(),
+            parent_lookup: ParentLookup::default(),
             transform: Transform::IDENTITY,
             width: 0.0,
             height: 0.0,
@@ -81,7 +132,8 @@ impl<NodeType: Clone, EdgeType: Clone> Default for FlowStore<NodeType, EdgeType>
             max_zoom: 2.0,
             translate_extent: crate::core::constants::INFINITE_EXTENT,
             node_extent: crate::core::constants::INFINITE_EXTENT,
-            node_origin: [0.0, 0.0],
+            node_origin: crate::core::constants::DEFAULT_NODE_ORIGIN,
+            z_index_mode: ZIndexMode::Basic,
             snap_grid: [15.0, 15.0],
             snap_to_grid: false,
             connection_mode: ConnectionMode::Strict,
@@ -96,268 +148,303 @@ impl<NodeType: Clone, EdgeType: Clone> Default for FlowStore<NodeType, EdgeType>
             select_nodes_on_drag: true,
             node_drag_threshold: 1.0,
             connection_drag_threshold: 1.0,
-            connection_radius: 20.0,
-            reconnect_radius: 10.0,
+            connection_radius: crate::core::constants::DEFAULT_CONNECTION_RADIUS,
+            reconnect_radius: crate::core::constants::DEFAULT_RECONNECT_RADIUS,
             auto_pan_on_connect: true,
             auto_pan_on_node_drag: true,
             auto_pan_on_selection: true,
             auto_pan_on_node_focus: true,
-            auto_pan_speed: 15.0,
+            auto_pan_speed: crate::core::constants::DEFAULT_AUTO_PAN_SPEED,
             only_render_visible_elements: false,
             multi_selection_active: false,
             nodes_selection_active: false,
             user_selection_active: false,
             user_selection_rect: None,
             pane_dragging: false,
-            connection: ConnectionState::default(),
-            aria_live_message: String::new(),
+            connection: ConnectionViewState::default(),
         }
     }
 }
 
-impl<NodeType: Clone, EdgeType: Clone> FlowStore<NodeType, EdgeType> {
+impl<NodeType: Clone + PartialEq, EdgeType: Clone> FlowStore<NodeType, EdgeType> {
     pub fn viewport(&self) -> Viewport {
         Viewport::new(self.transform.0, self.transform.1, self.transform.2)
     }
 
-    pub fn dimensions(&self) -> Dimensions {
-        Dimensions::new(self.width, self.height)
+    pub fn size(&self) -> ViewportSize {
+        ViewportSize::new(self.width, self.height)
     }
 
-    pub fn set_nodes(&mut self, nodes: Vec<Node<NodeType>>) -> bool {
+    pub fn adopt_options(&self, check_equality: bool) -> AdoptOptions {
+        AdoptOptions {
+            node_origin: self.node_origin,
+            node_extent: self.node_extent,
+            elevate_nodes_on_select: self.elevate_nodes_on_select,
+            z_index_mode: self.z_index_mode,
+            check_equality,
+        }
+    }
+
+    pub fn set_nodes(&mut self, nodes: Vec<Node<NodeType>>) -> AdoptResult {
         self.nodes = nodes;
-        self.adopt_nodes(true)
+        self.adopt(true)
+    }
+
+    pub fn adopt(&mut self, check_equality: bool) -> AdoptResult {
+        let options = self.adopt_options(check_equality);
+        adopt_user_nodes(
+            &self.nodes,
+            &mut self.node_lookup,
+            &mut self.parent_lookup,
+            &options,
+        )
     }
 
     pub fn set_edges(&mut self, edges: Vec<Edge<EdgeType>>) {
         self.edges = edges;
-        self.sync_edge_lookup();
+        self.sync_edges();
     }
 
-    pub fn adopt_nodes(&mut self, check_equality: bool) -> bool {
-        let options = AdoptOptions {
-            check_equality,
-            node_origin: self.node_origin,
-            node_extent: self.node_extent,
-            elevate_nodes_on_select: self.elevate_nodes_on_select,
-        };
-        let result = adopt_user_nodes(&self.nodes, options);
-        self.node_lookup = result.node_lookup;
-        self.parent_lookup = result.parent_lookup;
-        result.nodes_initialized
-    }
-
-    pub fn sync_edge_lookup(&mut self) {
+    pub fn sync_edges(&mut self) {
         self.edge_lookup = self
             .edges
             .iter()
             .map(|edge| (edge.id.clone(), edge.clone()))
             .collect();
-        self.connection_lookup =
-            crate::ui::connections::build_connection_lookup(&self.edges);
     }
 
     pub fn set_viewport(&mut self, viewport: Viewport) {
-        self.transform = Transform(viewport.x, viewport.y, viewport.zoom);
+        self.transform = Transform::new(viewport.x, viewport.y, viewport.zoom);
     }
 
-    pub fn update_dimensions(&mut self, dimensions: Dimensions) {
-        self.width = dimensions.width;
-        self.height = dimensions.height;
+    pub fn set_size(&mut self, size: ViewportSize) {
+        self.width = size.width;
+        self.height = size.height;
     }
 
-    pub fn update_node_internals(
-        &mut self,
-        updates: Vec<NodeInternalsUpdate>,
-    ) -> (Vec<NodeChange<NodeType>>, bool) {
-        let result: NodeInternalsResult<NodeType> = update_node_internals(
-            &updates,
+    pub fn apply_internals(&mut self, updates: &[NodeInternalsUpdate]) -> NodeInternalsResult<NodeType> {
+        let options = self.adopt_options(false);
+        crate::core::store::update_node_internals(
+            updates,
             &mut self.node_lookup,
-            &self.parent_lookup,
-            self.node_origin,
-            self.node_extent,
-            self.z_index_mode,
-        );
-
-        (result.changes, result.updated_internals)
+            &mut self.parent_lookup,
+            &options,
+        )
     }
 
-    pub fn refresh_positions(&mut self) {
-        update_absolute_positions(
-            &mut self.node_lookup,
-            &self.parent_lookup,
-            self.node_origin,
-        );
-    }
-
-    pub fn expand_parents(&mut self, children: Vec<ParentExpandChild>) -> Vec<NodeChange<NodeType>> {
-        self.refresh_positions();
-        handle_expand_parent(&children, &self.parent_lookup, self.node_origin)
-    }
-
-    pub fn internal_node(&self, id: &str) -> Option<&InternalNode<NodeType>> {
+    pub fn node(&self, id: &str) -> Option<&InternalNode<NodeType>> {
         self.node_lookup.get(id)
     }
 
-    pub fn user_node(&self, id: &str) -> Option<&Node<NodeType>> {
-        self.node_lookup.get(id).map(|node| &node.internals.user_node)
+    pub fn edge(&self, id: &str) -> Option<&Edge<EdgeType>> {
+        self.edge_lookup.get(id)
     }
 
-    pub fn edge_position(&self, edge_id: &str) -> Option<crate::core::geometry::EdgePosition> {
-        let edge = self.edge_lookup.get(edge_id)?;
-        let source = self.node_lookup.get(&edge.source)?;
-        let target = self.node_lookup.get(&edge.target)?;
+    pub fn edge_position(&self, id: &str) -> Option<EdgePosition> {
+        let edge = self.edge_lookup.get(id)?;
+        let source_node = self.node_lookup.get(&edge.source)?;
+        let target_node = self.node_lookup.get(&edge.target)?;
 
         get_edge_position(EdgePositionParams {
-            id: edge_id,
-            source_node: source,
+            id: &edge.id,
+            source_node,
             source_handle: edge.source_handle.as_deref(),
-            target_node: target,
+            target_node,
             target_handle: edge.target_handle.as_deref(),
             connection_mode: self.connection_mode,
         })
     }
 
-    pub fn selected_node_ids(&self) -> BTreeSet<String> {
-        self.node_lookup
-            .values()
-            .filter(|node| node.selected)
-            .map(|node| node.id.clone())
-            .collect()
-    }
+    pub fn visible_nodes(&self) -> Vec<InternalNode<NodeType>> {
+        if !self.only_render_visible_elements {
+            return self.node_lookup.values().cloned().collect();
+        }
 
-    pub fn selected_edge_ids(&self) -> BTreeSet<String> {
-        self.edge_lookup
-            .values()
-            .filter(|edge| edge.selected)
-            .map(|edge| edge.id.clone())
-            .collect()
-    }
-
-    pub fn nodes_inside(&self, rect: Rect, partially: bool) -> Vec<InternalNode<NodeType>> {
-        crate::core::graph::get_nodes_inside(
+        get_nodes_inside(
             &self.node_lookup,
-            rect,
+            self.size().rect(),
             self.transform,
-            partially,
+            true,
             true,
         )
     }
 
-    pub fn internal_bounds(&self) -> Rect {
-        get_internal_nodes_bounds(&self.node_lookup)
+    pub fn bounds(&self) -> Rect {
+        let boxes: Vec<crate::core::geometry::Box2> = self
+            .node_lookup
+            .values()
+            .filter(|node| !node.hidden)
+            .map(internal_node_to_box)
+            .collect();
+
+        if boxes.is_empty() {
+            return Rect::ZERO;
+        }
+
+        crate::core::utils::box_to_rect(get_bounds_of_box_list(&boxes))
     }
 
-    pub fn internal_bounds_filtered(
-        &self,
-        filter: impl Fn(&InternalNode<NodeType>) -> bool,
-    ) -> Rect {
-        get_internal_nodes_bounds_filtered(&self.node_lookup, filter)
-    }
-
-    pub fn handle_bounds(&self, node_id: &str) -> Option<&NodeHandleBounds> {
+    pub fn selected_nodes(&self) -> Vec<InternalNode<NodeType>> {
         self.node_lookup
-            .get(node_id)
-            .and_then(|node| node.internals.handle_bounds.as_ref())
+            .values()
+            .filter(|node| node.selected)
+            .cloned()
+            .collect()
     }
 
-    pub fn connection_key(&self, node_id: &str, handle_id: Option<&str>) -> String {
-        match handle_id {
-            Some(id) => format!("{node_id}-{id}"),
-            None => node_id.to_string(),
-        }
+    pub fn selected_edges(&self) -> Vec<Edge<EdgeType>> {
+        self.edge_lookup
+            .values()
+            .filter(|edge| edge.selected)
+            .cloned()
+            .collect()
     }
 
-    pub fn apply_node_changes(&mut self, changes: &[NodeChange<NodeType>]) -> Vec<Node<NodeType>> {
-        crate::core::change::apply_node_changes(changes, &self.nodes)
-    }
-
-    pub fn apply_edge_changes(&mut self, changes: &[EdgeChange<EdgeType>]) -> Vec<Edge<EdgeType>> {
-        crate::core::change::apply_edge_changes(changes, &self.edges)
-    }
-
-    pub fn select_nodes(&mut self, ids: &[String]) {
-        let mut changes = Vec::new();
-        for id in ids {
-            changes.push(NodeChange::Selection {
-                id: id.clone(),
-                selected: true,
-            });
-        }
-        let next = self.apply_node_changes(&changes);
-        self.set_nodes(next);
-    }
-
-    pub fn select_edges(&mut self, ids: &[String]) {
-        let mut changes = Vec::new();
-        for id in ids {
-            changes.push(EdgeChange::Selection {
-                id: id.clone(),
-                selected: true,
-            });
-        }
-        let next = self.apply_edge_changes(&changes);
-        self.set_edges(next);
-    }
-
-    pub fn clear_selection(&mut self) {
-        let node_changes: Vec<NodeChange<NodeType>> = self
+    pub fn selected_bounds(&self) -> Option<Rect> {
+        let boxes: Vec<crate::core::geometry::Box2> = self
             .node_lookup
             .values()
             .filter(|node| node.selected)
-            .map(|node| NodeChange::Selection {
-                id: node.id.clone(),
-                selected: false,
-            })
+            .map(internal_node_to_box)
             .collect();
-        let edge_changes: Vec<EdgeChange<EdgeType>> = self
+
+        if boxes.is_empty() {
+            None
+        } else {
+            Some(crate::core::utils::box_to_rect(get_bounds_of_box_list(&boxes)))
+        }
+    }
+
+    pub fn nodes_inside(&self, rect: Rect, partially: bool) -> Vec<InternalNode<NodeType>> {
+        get_nodes_inside(&self.node_lookup, rect, self.transform, partially, true)
+    }
+
+    pub fn node_changes_to_nodes(&self, changes: &[NodeChange<NodeType>]) -> Vec<Node<NodeType>> {
+        crate::core::change::apply_node_changes(changes, &self.nodes)
+    }
+
+    pub fn edge_changes_to_edges(&self, changes: &[EdgeChange<EdgeType>]) -> Vec<Edge<EdgeType>> {
+        crate::core::change::apply_edge_changes(changes, &self.edges)
+    }
+
+    pub fn commit_node_changes(&mut self, changes: &[NodeChange<NodeType>]) -> AdoptResult {
+        let next = self.node_changes_to_nodes(changes);
+        self.set_nodes(next)
+    }
+
+    pub fn commit_edge_changes(&mut self, changes: &[EdgeChange<EdgeType>]) {
+        let next = self.edge_changes_to_edges(changes);
+        self.set_edges(next);
+    }
+
+    pub fn select_nodes(&mut self, ids: &[String]) {
+        let changes: Vec<NodeChange<NodeType>> = ids
+            .iter()
+            .map(|id| NodeChange::select(id.clone(), true))
+            .collect();
+
+        if !changes.is_empty() {
+            self.commit_node_changes(&changes);
+        }
+    }
+
+    pub fn select_edges(&mut self, ids: &[String]) {
+        let changes: Vec<EdgeChange<EdgeType>> = ids
+            .iter()
+            .map(|id| EdgeChange::select(id.clone(), true))
+            .collect();
+
+        if !changes.is_empty() {
+            self.commit_edge_changes(&changes);
+        }
+    }
+
+    pub fn clear_node_selection(&mut self) {
+        let changes: Vec<NodeChange<NodeType>> = self
+            .node_lookup
+            .values()
+            .filter(|node| node.selected)
+            .map(|node| NodeChange::select(node.id.clone(), false))
+            .collect();
+
+        if !changes.is_empty() {
+            self.commit_node_changes(&changes);
+        }
+    }
+
+    pub fn clear_edge_selection(&mut self) {
+        let changes: Vec<EdgeChange<EdgeType>> = self
             .edge_lookup
             .values()
             .filter(|edge| edge.selected)
-            .map(|edge| EdgeChange::Selection {
-                id: edge.id.clone(),
-                selected: false,
-            })
+            .map(|edge| EdgeChange::select(edge.id.clone(), false))
             .collect();
 
-        if !node_changes.is_empty() {
-            let next = self.apply_node_changes(&node_changes);
-            self.set_nodes(next);
-        }
-
-        if !edge_changes.is_empty() {
-            let next = self.apply_edge_changes(&edge_changes);
-            self.set_edges(next);
+        if !changes.is_empty() {
+            self.commit_edge_changes(&changes);
         }
     }
 
-    pub fn update_node_position(&mut self, id: &str, position: XYPosition, dragging: bool) {
-        if let Some(node) = self.node_lookup.get_mut(id) {
-            node.position = position;
-            node.internals.user_node.position = position;
-            if dragging {
-                node.dragging = true;
-                node.internals.user_node.dragging = true;
-            }
-        }
+    pub fn clear_selection(&mut self) {
+        self.clear_node_selection();
+        self.clear_edge_selection();
     }
 
-    pub fn update_node_dimensions(&mut self, id: &str, dimensions: Dimensions) {
-        if let Some(node) = self.node_lookup.get_mut(id) {
-            node.measured.width = Some(dimensions.width);
-            node.measured.height = Some(dimensions.height);
-            node.internals.user_node.measured.width = Some(dimensions.width);
-            node.internals.user_node.measured.height = Some(dimensions.height);
+    pub fn bounding_viewport(&self, padding: crate::core::geometry::Padding) -> Option<Viewport> {
+        let boxes: Vec<crate::core::geometry::Box2> = self
+            .node_lookup
+            .values()
+            .filter(|node| !node.hidden)
+            .map(internal_node_to_box)
+            .collect();
+
+        if boxes.is_empty() {
+            return None;
         }
+
+        let rect = crate::core::utils::box_to_rect(get_bounds_of_box_list(&boxes));
+
+        if rect.width <= 0.0 || rect.height <= 0.0 {
+            return None;
+        }
+
+        Some(get_viewport_for_bounds(
+            rect,
+            self.width,
+            self.height,
+            self.min_zoom,
+            self.max_zoom,
+            padding,
+        ))
     }
 
-    pub fn reset(&mut self) {
+    pub fn padding_of(padding: crate::core::geometry::Padding) -> crate::core::utils::ResolvedPadding {
+        parse_paddings(padding, 0.0, 0.0)
+    }
+
+    pub fn node_ids(&self) -> Vec<String> {
+        self.node_lookup.keys().cloned().collect()
+    }
+
+    pub fn edge_ids(&self) -> Vec<String> {
+        self.edge_lookup.keys().cloned().collect()
+    }
+
+    pub fn lookup_map(&self) -> BTreeMap<String, InternalNode<NodeType>> {
+        self.node_lookup.clone()
+    }
+
+    pub fn reset_keep_config(&mut self) {
         let rf_id = self.rf_id.clone();
         let min_zoom = self.min_zoom;
         let max_zoom = self.max_zoom;
+        let width = self.width;
+        let height = self.height;
         *self = FlowStore::default();
         self.rf_id = rf_id;
         self.min_zoom = min_zoom;
         self.max_zoom = max_zoom;
+        self.width = width;
+        self.height = height;
     }
 }

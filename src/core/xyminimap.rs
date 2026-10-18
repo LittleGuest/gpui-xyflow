@@ -2,7 +2,7 @@ use crate::core::geometry::{
     CoordinateExtent, Rect, Transform, Viewport, XYPosition,
 };
 use crate::core::node::{InternalNode, NodeLookup};
-use crate::core::utils::get_bounds_of_rects;
+use crate::core::utils::get_bounds_of_rect_slice;
 
 pub const DEFAULT_MINIMAP_WIDTH: f64 = 200.0;
 pub const DEFAULT_MINIMAP_HEIGHT: f64 = 150.0;

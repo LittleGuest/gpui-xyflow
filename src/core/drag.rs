@@ -1,11 +1,9 @@
 use std::collections::BTreeMap;
 
 use crate::core::edge::Edge;
-use crate::core::geom::{
-    CoordinateExtent, Dimensions, NodeOrigin, SnapGrid, Transform, XYPosition,
-};
+use crate::core::geometry::{Box2, CoordinateExtent, Dimensions, NodeOrigin, Rect, SnapGrid, Transform, XYPosition};
 use crate::core::node::{
-    InternalNode, Node, NodeDragItem, NodeExtent, NodeLookup, NodeOrigin as OriginAlias,
+    InternalNode, Node, NodeDragItem, NodeExtent, NodeLookup,
 };
 use crate::core::store::is_parent_selected;
 use crate::core::utils::{
@@ -20,7 +18,7 @@ pub struct DragStore {
     pub node_extent: CoordinateExtent,
     pub snap_grid: SnapGrid,
     pub snap_to_grid: bool,
-    pub node_origin: OriginAlias,
+    pub node_origin: NodeOrigin,
     pub multi_selection_active: bool,
     pub nodes_draggable: bool,
     pub auto_pan_on_node_drag: bool,
@@ -139,7 +137,7 @@ pub struct DragUpdate {
     pub changed: bool,
     pub items: BTreeMap<String, NodeDragItem>,
     pub positions: BTreeMap<String, NodePositionUpdate>,
-    pub parent_expansions: Vec<(String, String, crate::core::geom::Rect)>,
+    pub parent_expansions: Vec<(String, String, crate::core::geometry::Rect)>,
     pub single_node_position: Option<XYPosition>,
 }
 
@@ -153,7 +151,7 @@ pub fn update_nodes(params: UpdateNodesParams<'_>, drag_items: &mut BTreeMap<Str
     let is_multi_drag = drag_items.len() > 1;
 
     let nodes_box = if is_multi_drag {
-        let mut bounds = crate::core::geom::Box2::EMPTY;
+        let mut bounds = crate::core::geometry::Box2::EMPTY;
         let mut has_item = false;
         for item in drag_items.values() {
             has_item = true;
@@ -252,7 +250,7 @@ pub fn update_nodes(params: UpdateNodesParams<'_>, drag_items: &mut BTreeMap<Str
                     parent_expansions.push((
                         id.clone(),
                         parent_id.clone(),
-                        crate::core::geom::Rect::new(
+                        crate::core::geometry::Rect::new(
                             update.position_absolute.x,
                             update.position_absolute.y,
                             item.measured.width.unwrap_or(0.0),
@@ -288,8 +286,8 @@ pub fn auto_pan_for_drag(
     calc_auto_pan(pointer, container, speed, distance)
 }
 
-pub fn parent_expansion_rect(item: &NodeDragItem) -> crate::core::geom::Rect {
-    crate::core::geom::Rect::new(
+pub fn parent_expansion_rect(item: &NodeDragItem) -> crate::core::geometry::Rect {
+    crate::core::geometry::Rect::new(
         item.position_absolute.x,
         item.position_absolute.y,
         item.measured.width.unwrap_or(0.0),
@@ -316,7 +314,7 @@ pub fn is_node_within_parent<S: Clone>(node: &InternalNode<S>, parent: &Internal
         && node_pos.y + node_size.height <= parent_pos.y + parent_size.height
 }
 
-pub fn expand_bounds_to_include(parent: crate::core::geom::Rect, child: crate::core::geom::Rect) -> crate::core::geom::Rect {
+pub fn expand_bounds_to_include(parent: crate::core::geometry::Rect, child: crate::core::geometry::Rect) -> crate::core::geometry::Rect {
     get_bounds_of_rects(parent, child)
 }
 
