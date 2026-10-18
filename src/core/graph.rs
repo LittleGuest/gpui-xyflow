@@ -346,3 +346,11 @@ pub fn get_elevated_edge_z_index<S: Clone>(
 
     edge_z + source_z.max(target_z)
 }
+
+pub fn get_selected_nodes_bounds<S: Clone>(node_lookup: &NodeLookup<S>) -> Rect {
+    get_internal_nodes_bounds(node_lookup.values().filter(|node| node.selected))
+}
+
+pub fn get_all_nodes_bounds<S: Clone>(node_lookup: &NodeLookup<S>) -> Rect {
+    get_internal_nodes_bounds(node_lookup.values())
+}

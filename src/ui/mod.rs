@@ -1,6 +1,7 @@
 pub mod api;
 pub mod background;
 pub mod callbacks;
+pub mod components;
 pub mod connections;
 pub mod container;
 pub mod controls;
@@ -24,6 +25,7 @@ pub mod viewport;
 pub use api::*;
 pub use background::*;
 pub use callbacks::*;
+pub use components::*;
 pub use connections::*;
 pub use container::*;
 pub use controls::*;

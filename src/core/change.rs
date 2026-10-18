@@ -381,3 +381,59 @@ pub fn get_edge_selection_changes(
     }
     changes
 }
+
+pub fn get_nodes_diff_changes<S: Clone + PartialEq>(
+    items: &[Node<S>],
+    node_lookup: &crate::core::node::NodeLookup<S>,
+) -> Vec<NodeChange<S>> {
+    let mut changes: Vec<NodeChange<S>> = Vec::new();
+
+    for (index, item) in items.iter().enumerate() {
+        match node_lookup.get(&item.id) {
+            Some(lookup_item) => {
+                if lookup_item.internals.user_node != *item {
+                    changes.push(NodeChange::replace(item.id.clone(), item.clone()));
+                }
+            }
+            None => changes.push(NodeChange::add(item.clone(), Some(index))),
+        }
+    }
+
+    for id in node_lookup.keys() {
+        if !items.iter().any(|item| &item.id == id) {
+            changes.push(NodeChange::remove(id.clone()));
+        }
+    }
+
+    changes
+}
+
+pub fn get_edges_diff_changes<S: Clone + PartialEq>(
+    items: &[Edge<S>],
+    edge_lookup: &crate::core::edge::EdgeLookup<S>,
+) -> Vec<EdgeChange<S>> {
+    let mut changes: Vec<EdgeChange<S>> = Vec::new();
+
+    for (index, item) in items.iter().enumerate() {
+        match edge_lookup.get(&item.id) {
+            Some(store_item) => {
+                if store_item != item {
+                    changes.push(EdgeChange::replace(item.id.clone(), item.clone()));
+                }
+            }
+            None => changes.push(EdgeChange::add(item.clone(), Some(index))),
+        }
+    }
+
+    for id in edge_lookup.keys() {
+        if !items.iter().any(|item| &item.id == id) {
+            changes.push(EdgeChange::remove(id.clone()));
+        }
+    }
+
+    changes
+}
+
+pub fn element_to_remove_change(id: impl Into<String>) -> RemoveChange {
+    RemoveChange { id: id.into() }
+}
