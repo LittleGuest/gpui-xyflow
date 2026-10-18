@@ -183,3 +183,27 @@ pub fn resize_handle_fill(theme: &FlowTheme) -> gpui_kit::Rgba {
 pub fn resize_border_fill(theme: &FlowTheme) -> gpui_kit::Rgba {
     theme.selection_border
 }
+
+pub fn resize_change_to_node_changes<S>(
+    node_id: &str,
+    change: &crate::core::xyresizer::XYResizerChange,
+    resizing: bool,
+) -> Vec<crate::core::change::NodeChange<S>> {
+    vec![
+        crate::core::change::NodeChange::Position(crate::core::change::NodePositionChange {
+            id: node_id.to_string(),
+            position: Some(XYPosition::new(change.x, change.y)),
+            position_absolute: None,
+            dragging: None,
+        }),
+        crate::core::change::NodeChange::Dimensions(crate::core::change::NodeDimensionChange {
+            id: node_id.to_string(),
+            dimensions: Some(crate::core::geometry::Dimensions::new(
+                change.width,
+                change.height,
+            )),
+            resizing: Some(resizing),
+            set_attributes: None,
+        }),
+    ]
+}

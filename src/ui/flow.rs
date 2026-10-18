@@ -14,6 +14,7 @@ use crate::{
         utils::snap_position,
         xyhandle::{XYHandle, XYHandleOptions, XYHandleStartParams},
         xypanzoom::{PointerEvent, PointerEventKind, XYPanZoom},
+        xyresizer::{ResizeParams, XYResizer, XYResizerOptions},
     },
     ui::{
         background::BackgroundVariant,
@@ -22,6 +23,7 @@ use crate::{
             build_render_data, paint_background, paint_connection, paint_edges, paint_nodes,
             paint_selection,
         },
+        resizer::{find_resize_control, resize_change_to_node_changes, resize_controls},
         store::{FlowProps, FlowStore},
     },
 };
@@ -33,6 +35,7 @@ enum DragMode {
     Node,
     Selection,
     Connection,
+    Resize,
 }
 
 pub struct Flow {
@@ -40,6 +43,9 @@ pub struct Flow {
     pan_zoom: XYPanZoom,
     drag: XYDrag,
     handle: XYHandle<String>,
+    resizer: XYResizer,
+    resize_node_id: Option<String>,
+    resize_control_position: Option<String>,
     focus_handle: FocusHandle,
     drag_mode: DragMode,
     last_pointer: XYPosition,
@@ -61,6 +67,9 @@ impl Flow {
             pan_zoom,
             drag: XYDrag::default(),
             handle: XYHandle::new(XYHandleOptions::default()),
+            resizer: XYResizer::default(),
+            resize_node_id: None,
+            resize_control_position: None,
             focus_handle: cx.focus_handle(),
             drag_mode: DragMode::None,
             last_pointer: XYPosition::new(0.0, 0.0),
@@ -82,6 +91,9 @@ impl Flow {
             pan_zoom,
             drag: XYDrag::default(),
             handle: XYHandle::new(XYHandleOptions::default()),
+            resizer: XYResizer::default(),
+            resize_node_id: None,
+            resize_control_position: None,
             focus_handle: cx.focus_handle(),
             drag_mode: DragMode::None,
             last_pointer: XYPosition::new(0.0, 0.0),
@@ -288,6 +300,43 @@ impl Flow {
         self.handle.set_options(options);
     }
 
+    fn sync_resizer_options(&mut self) {
+        let props = self.store.props();
+        let options = XYResizerOptions {
+            keep_aspect_ratio: false,
+            node_origin: props.node_origin,
+            extent: None,
+            child_extent: None,
+            boundaries: crate::core::xyresizer::Boundaries::with_defaults(0.0, 0.0),
+            snap_to_grid: props.snap_to_grid,
+            snap_grid: props.snap_grid,
+        };
+        self.resizer.set_options(options);
+    }
+
+    fn resize_control_at(&self, flow_point: XYPosition) -> Option<(String, String)> {
+        if !self.store.props().nodes_resizable {
+            return None;
+        }
+        for node in self.store.node_lookup().values() {
+            if node.hidden {
+                continue;
+            }
+            let dimensions = node.size();
+            let rect = Rect::new(
+                node.internals.position_absolute.x,
+                node.internals.position_absolute.y,
+                dimensions.width,
+                dimensions.height,
+            );
+            let controls = resize_controls(rect, 10.0, 4.0);
+            if let Some(control) = find_resize_control(&controls, flow_point) {
+                return Some((node.id.clone(), control.position.clone()));
+            }
+        }
+        None
+    }
+
     fn apply_drag_update(
         &mut self,
         positions: &std::collections::BTreeMap<String, crate::core::drag::NodePositionUpdate>,
@@ -355,6 +404,28 @@ impl Flow {
                 }
                 cx.notify();
                 return;
+            }
+            if let Some((node_id, control_position)) = self.resize_control_at(flow_point) {
+                self.sync_resizer_options();
+                if let Some(node) = self.store.node_lookup().get(&node_id).cloned() {
+                    let dimensions = node.size();
+                    let rect = Rect::new(
+                        node.internals.position_absolute.x,
+                        node.internals.position_absolute.y,
+                        dimensions.width,
+                        dimensions.height,
+                    );
+                    self.resizer.start(
+                        &control_position,
+                        ResizeParams::new(rect.x, rect.y, rect.width, rect.height),
+                        flow_point,
+                    );
+                    self.resize_node_id = Some(node_id);
+                    self.resize_control_position = Some(control_position);
+                    self.drag_mode = DragMode::Resize;
+                    cx.notify();
+                    return;
+                }
             }
             if let Some(node_id) = self.node_ids_at(flow_point) {
                 let additive = event.modifiers.shift;
@@ -471,6 +542,17 @@ impl Flow {
                 self.store.interaction_mut().selection_end = Some(flow_point);
                 cx.notify();
             }
+            DragMode::Resize => {
+                if let Some(node_id) = self.resize_node_id.clone()
+                    && let Some(change) = self.resizer.resize(flow_point)
+                {
+                    let changes = resize_change_to_node_changes::<String>(&node_id, &change, true);
+                    self.store.apply_node_changes(&changes);
+                    self.store.update_nodes();
+                }
+                self.last_pointer = flow_point;
+                cx.notify();
+            }
             DragMode::None => {}
         }
     }
@@ -524,6 +606,17 @@ impl Flow {
                 }
                 self.store.interaction_mut().selection_start = None;
                 self.store.interaction_mut().selection_end = None;
+            }
+            DragMode::Resize => {
+                if let Some(node_id) = self.resize_node_id.clone()
+                    && let Some(change) = self.resizer.end()
+                {
+                    let changes = resize_change_to_node_changes::<String>(&node_id, &change, false);
+                    self.store.apply_node_changes(&changes);
+                    self.store.update_nodes();
+                }
+                self.resize_node_id = None;
+                self.resize_control_position = None;
             }
             DragMode::None => {}
         }
