@@ -1,3 +1,5 @@
+#![allow(ambiguous_glob_reexports)]
+
 #[path = "core/mod.rs"]
 pub mod core;
 

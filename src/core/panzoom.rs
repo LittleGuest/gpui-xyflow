@@ -206,6 +206,7 @@ pub fn transition_ease_cubic_in_out(t: f64) -> f64 {
     (t * t * t) / 2.0
 }
 
+#[derive(Clone, Debug)]
 pub struct PanZoom {
     transform: Transform,
     options: PanZoomOptions,
