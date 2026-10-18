@@ -6,9 +6,11 @@ use gpui_kit::{
 
 use crate::{
     core::{
+        drag::{CalculateNodePositionParams, XYDrag, XYDragOptions, calculate_node_position},
         edge::Edge,
         geometry::{Rect, XYPosition},
         node::{HandleType, Node},
+        utils::snap_position,
         xypanzoom::{PointerEvent, PointerEventKind, XYPanZoom},
     },
     ui::{
@@ -34,6 +36,7 @@ enum DragMode {
 pub struct Flow {
     store: FlowStore<String>,
     pan_zoom: XYPanZoom,
+    drag: XYDrag,
     focus_handle: FocusHandle,
     drag_mode: DragMode,
     last_pointer: XYPosition,
@@ -53,6 +56,7 @@ impl Flow {
         Flow {
             store,
             pan_zoom,
+            drag: XYDrag::default(),
             focus_handle: cx.focus_handle(),
             drag_mode: DragMode::None,
             last_pointer: XYPosition::new(0.0, 0.0),
@@ -72,6 +76,7 @@ impl Flow {
         Flow {
             store,
             pan_zoom,
+            drag: XYDrag::default(),
             focus_handle: cx.focus_handle(),
             drag_mode: DragMode::None,
             last_pointer: XYPosition::new(0.0, 0.0),
@@ -250,6 +255,53 @@ impl Flow {
         }
     }
 
+    fn sync_drag_options(&mut self) {
+        let props = self.store.props();
+        let options = XYDragOptions {
+            node_drag_threshold: props.node_drag_threshold,
+            no_drag_class_name: None,
+            handle_selector: None,
+            auto_pan_on_node_drag: props.auto_pan_on_node_drag,
+            auto_pan_speed: props.auto_pan_speed,
+            snap_to_grid: props.snap_to_grid,
+            snap_grid: props.snap_grid,
+            nodes_draggable: props.nodes_draggable,
+        };
+        self.drag.set_options(options);
+    }
+
+    fn apply_drag_update(
+        &mut self,
+        positions: &std::collections::BTreeMap<String, crate::core::drag::NodePositionUpdate>,
+    ) {
+        for (id, update) in positions {
+            if let Some(node) = self.store.node_lookup_mut().get_mut(id) {
+                node.position = update.position;
+                node.internals.position_absolute = update.position_absolute;
+                node.dragging = true;
+                node.internals.user_node.position = update.position;
+                node.internals.user_node.dragging = true;
+            }
+            if let Some(user_node) = self.store.nodes_mut().iter_mut().find(|n| n.id == *id) {
+                user_node.position = update.position;
+                user_node.dragging = true;
+            }
+        }
+    }
+
+    fn finish_drag(&mut self, dragged: bool, items: Vec<crate::core::node::NodeDragItem>) {
+        if dragged {
+            self.store.update_node_positions(&items, false);
+        }
+        for node in self.store.node_lookup_mut().values_mut() {
+            node.dragging = false;
+            node.internals.user_node.dragging = false;
+        }
+        for node in self.store.nodes_mut().iter_mut() {
+            node.dragging = false;
+        }
+    }
+
     fn handle_mouse_down(
         &mut self,
         event: &MouseDownEvent,
@@ -273,7 +325,10 @@ impl Flow {
             if let Some(node_id) = self.node_ids_at(flow_point) {
                 let additive = event.modifiers.shift;
                 self.select_node(&node_id, additive);
-                self.store.start_drag_items(flow_point);
+                self.sync_drag_options();
+                let lookup = self.store.node_lookup().clone();
+                self.drag
+                    .on_pointer_down(flow_point, Some(&node_id), &lookup);
                 self.drag_mode = DragMode::Node;
                 cx.notify();
                 return;
@@ -325,7 +380,36 @@ impl Flow {
         let flow_point = self.store.screen_to_flow_position(local);
         match self.drag_mode {
             DragMode::Node => {
-                self.store.move_nodes_by(flow_point);
+                let node_origin = self.store.props().node_origin;
+                let node_extent = self.store.props().node_extent;
+                let snap_grid = self.store.props().snap_grid;
+                let snap_to_grid = self.store.props().snap_to_grid;
+                let lookup = self.store.node_lookup().clone();
+                let pointer = flow_point;
+                let update = self
+                    .drag
+                    .on_pointer_move(pointer, &lookup, move |item, lookup| {
+                        let mut next = XYPosition::new(
+                            pointer.x - item.distance.x,
+                            pointer.y - item.distance.y,
+                        );
+                        if snap_to_grid {
+                            next = snap_position(next, snap_grid);
+                        }
+                        if let Some(result) = calculate_node_position(CalculateNodePositionParams {
+                            node_id: &item.id,
+                            next_position: next,
+                            node_lookup: lookup,
+                            node_origin,
+                            node_extent,
+                        }) {
+                            item.position = result.position;
+                            item.position_absolute = result.position_absolute;
+                        }
+                    });
+                if update.changed {
+                    self.apply_drag_update(&update.positions);
+                }
                 self.last_pointer = flow_point;
                 cx.notify();
             }
@@ -356,7 +440,8 @@ impl Flow {
     ) {
         match self.drag_mode {
             DragMode::Node => {
-                self.store.end_drag();
+                let (dragged, items) = self.drag.on_pointer_up();
+                self.finish_drag(dragged, items);
             }
             DragMode::Pane => {
                 self.store.pan_zoom_mut().pointer_up();
