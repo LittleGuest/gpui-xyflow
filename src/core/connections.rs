@@ -1,36 +1,141 @@
 use std::collections::BTreeMap;
 
 use crate::core::{
-    edge::{Connection, Edge},
+    edge::{Connection, Edge, EdgeLookup, HandleConnection},
     graph::ConnectionMode,
     node::Handle,
 };
 
-pub type ConnectionLookup = BTreeMap<String, Connection>;
+pub type ConnectionLookup = BTreeMap<String, BTreeMap<String, HandleConnection>>;
 
-pub fn get_connection_key(connection: &Connection) -> String {
-    let source_handle = connection.source_handle.clone().unwrap_or_default();
-    let target_handle = connection.target_handle.clone().unwrap_or_default();
+pub fn get_connection_key(
+    source: &str,
+    source_handle: Option<&str>,
+    target: &str,
+    target_handle: Option<&str>,
+) -> String {
     format!(
-        "{}__{}__{}__{}",
-        connection.source, source_handle, connection.target, target_handle
+        "{}-{}--{}-{}",
+        source,
+        source_handle.unwrap_or(""),
+        target,
+        target_handle.unwrap_or("")
     )
 }
 
-pub fn add_connection_to_lookup(lookup: &mut ConnectionLookup, connection: Connection) {
-    lookup.insert(get_connection_key(&connection), connection);
-}
+pub fn add_connection_to_lookup(
+    handle_type: &str,
+    connection: &HandleConnection,
+    connection_key: &str,
+    lookup: &mut ConnectionLookup,
+    node_id: &str,
+    handle_id: Option<&str>,
+) {
+    let mut insert = |key: String| {
+        let map = lookup.entry(key).or_default();
+        map.insert(connection_key.to_string(), connection.clone());
+    };
 
-pub fn remove_connection_from_lookup(lookup: &mut ConnectionLookup, connection: &Connection) {
-    lookup.remove(&get_connection_key(connection));
-}
-
-pub fn are_connection_maps_equal(a: &ConnectionLookup, b: &ConnectionLookup) -> bool {
-    if a.len() != b.len() {
-        return false;
+    insert(node_id.to_string());
+    insert(format!("{node_id}-{handle_type}"));
+    if let Some(handle_id) = handle_id {
+        insert(format!("{node_id}-{handle_type}-{handle_id}"));
     }
-    a.iter()
-        .all(|(key, value)| b.get(key).map(|other| other == value).unwrap_or(false))
+}
+
+pub fn update_connection_lookup<S: Clone>(
+    connection_lookup: &mut ConnectionLookup,
+    edge_lookup: &mut EdgeLookup<S>,
+    edges: &[Edge<S>],
+) {
+    connection_lookup.clear();
+    edge_lookup.clear();
+
+    for edge in edges {
+        let connection = HandleConnection {
+            connection: Connection {
+                source: edge.source.clone(),
+                target: edge.target.clone(),
+                source_handle: edge.source_handle.clone(),
+                target_handle: edge.target_handle.clone(),
+            },
+            edge_id: edge.id.clone(),
+        };
+
+        let source_key = get_connection_key(
+            &edge.source,
+            edge.source_handle.as_deref(),
+            &edge.target,
+            edge.target_handle.as_deref(),
+        );
+        let target_key = get_connection_key(
+            &edge.target,
+            edge.target_handle.as_deref(),
+            &edge.source,
+            edge.source_handle.as_deref(),
+        );
+
+        add_connection_to_lookup(
+            "source",
+            &connection,
+            &target_key,
+            connection_lookup,
+            &edge.source,
+            edge.source_handle.as_deref(),
+        );
+        add_connection_to_lookup(
+            "target",
+            &connection,
+            &source_key,
+            connection_lookup,
+            &edge.target,
+            edge.target_handle.as_deref(),
+        );
+
+        edge_lookup.insert(edge.id.clone(), edge.clone());
+    }
+}
+
+pub fn are_connection_maps_equal(
+    a: Option<&BTreeMap<String, HandleConnection>>,
+    b: Option<&BTreeMap<String, HandleConnection>>,
+) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => {
+            if a.len() != b.len() {
+                return false;
+            }
+            a.keys().all(|key| b.contains_key(key))
+        }
+        _ => false,
+    }
+}
+
+pub fn handle_connection_change<F>(
+    a: &BTreeMap<String, HandleConnection>,
+    b: &BTreeMap<String, HandleConnection>,
+    cb: F,
+) where
+    F: FnOnce(&[HandleConnection]),
+{
+    let diff: Vec<HandleConnection> = a
+        .iter()
+        .filter(|(key, _)| !b.contains_key(*key))
+        .map(|(_, connection)| connection.clone())
+        .collect();
+
+    if !diff.is_empty() {
+        cb(&diff);
+    }
+}
+
+pub fn connection_status(is_valid: Option<bool>) -> Option<&'static str> {
+    match is_valid {
+        None => None,
+        Some(true) => Some("valid"),
+        Some(false) => Some("invalid"),
+    }
 }
 
 pub fn get_connection_status(connection: &Connection, edges: &[Edge]) -> (bool, Option<bool>) {

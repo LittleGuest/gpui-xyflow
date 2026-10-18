@@ -1,6 +1,9 @@
 use crate::core::{
     edge::{Edge, EdgeGraphics},
-    geometry::{EdgePosition, NodeOrigin, Position, Rect, Transform, XYPosition, ZIndexMode},
+    geometry::{
+        EdgePosition, NodeOrigin, Padding, Position, Rect, Transform, Viewport, XYPosition,
+        ZIndexMode,
+    },
     node::{Handle, HandleType, InternalNode, Node, NodeLookup},
     utils::{
         box_to_rect, get_bounds_of_boxes, get_rects_overlapping_area, internal_node_to_box,
@@ -353,4 +356,134 @@ pub fn get_selected_nodes_bounds<S: Clone>(node_lookup: &NodeLookup<S>) -> Rect 
 
 pub fn get_all_nodes_bounds<S: Clone>(node_lookup: &NodeLookup<S>) -> Rect {
     get_internal_nodes_bounds(node_lookup.values())
+}
+
+pub fn get_node_position_with_origin<S: Clone>(
+    node: &Node<S>,
+    node_origin: NodeOrigin,
+) -> XYPosition {
+    let dimensions = node.size();
+    let origin = node.origin.unwrap_or(node_origin);
+    let offset_x = dimensions.width * origin[0];
+    let offset_y = dimensions.height * origin[1];
+
+    XYPosition::new(node.position.x - offset_x, node.position.y - offset_y)
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct FitViewOptions {
+    pub nodes: Option<Vec<String>>,
+    pub include_hidden_nodes: bool,
+    pub min_zoom: Option<f64>,
+    pub max_zoom: Option<f64>,
+    pub padding: Option<f64>,
+}
+
+pub fn get_fit_view_nodes<S: Clone>(
+    node_lookup: &NodeLookup<S>,
+    options: &FitViewOptions,
+) -> Vec<InternalNode<S>> {
+    let option_ids: Option<std::collections::BTreeSet<String>> = options
+        .nodes
+        .as_ref()
+        .map(|ids| ids.iter().cloned().collect());
+
+    node_lookup
+        .values()
+        .filter(|node| {
+            let is_visible = if options.include_hidden_nodes {
+                let dimensions = node.size();
+                dimensions.width > 0.0 && dimensions.height > 0.0
+            } else {
+                node.measured.width.is_some() && node.measured.height.is_some() && !node.hidden
+            };
+
+            is_visible
+                && option_ids
+                    .as_ref()
+                    .map(|ids| ids.contains(&node.id))
+                    .unwrap_or(true)
+        })
+        .cloned()
+        .collect()
+}
+
+pub fn fit_viewport<S: Clone>(
+    node_lookup: &NodeLookup<S>,
+    width: f64,
+    height: f64,
+    min_zoom: f64,
+    max_zoom: f64,
+    options: &FitViewOptions,
+) -> Option<Viewport> {
+    let nodes_to_fit = get_fit_view_nodes(node_lookup, options);
+    if nodes_to_fit.is_empty() {
+        return None;
+    }
+
+    let bounds = get_internal_nodes_bounds(nodes_to_fit.iter());
+    let padding: Padding = options.padding.unwrap_or(0.1).into();
+
+    Some(crate::core::utils::get_viewport_for_bounds(
+        bounds,
+        width,
+        height,
+        options.min_zoom.unwrap_or(min_zoom),
+        options.max_zoom.unwrap_or(max_zoom),
+        padding,
+    ))
+}
+
+pub fn get_elements_to_remove<S: Clone + PartialEq>(
+    nodes_to_remove: &[Node<S>],
+    edges_to_remove: &[Edge<S>],
+    nodes: &[Node<S>],
+    edges: &[Edge<S>],
+) -> (Vec<Node<S>>, Vec<Edge<S>>) {
+    let node_ids: std::collections::BTreeSet<&str> = nodes_to_remove
+        .iter()
+        .map(|node| node.id.as_str())
+        .collect();
+    let mut matching_nodes: Vec<Node<S>> = Vec::new();
+
+    for node in nodes {
+        if node.deletable == Some(false) {
+            continue;
+        }
+
+        let is_included = node_ids.contains(node.id.as_str());
+        let parent_hit = !is_included
+            && node
+                .parent_id
+                .as_ref()
+                .map(|parent_id| matching_nodes.iter().any(|n| &n.id == parent_id))
+                .unwrap_or(false);
+
+        if is_included || parent_hit {
+            matching_nodes.push(node.clone());
+        }
+    }
+
+    let edge_ids: std::collections::BTreeSet<&str> = edges_to_remove
+        .iter()
+        .map(|edge| edge.id.as_str())
+        .collect();
+    let deletable_edges: Vec<Edge<S>> = edges
+        .iter()
+        .filter(|edge| edge.deletable != Some(false))
+        .cloned()
+        .collect();
+
+    let matching_node_ids: Vec<&str> = matching_nodes.iter().map(|n| n.id.as_str()).collect();
+    let connected_edges = get_connected_edges(&matching_node_ids, &deletable_edges);
+    let mut matching_edges: Vec<Edge<S>> = connected_edges.into_iter().cloned().collect();
+
+    for edge in &deletable_edges {
+        let is_included = edge_ids.contains(edge.id.as_str());
+        if is_included && !matching_edges.iter().any(|e| e.id == edge.id) {
+            matching_edges.push(edge.clone());
+        }
+    }
+
+    (matching_nodes, matching_edges)
 }
