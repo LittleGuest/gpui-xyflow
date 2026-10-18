@@ -1,3 +1,4 @@
+pub mod api;
 pub mod background;
 pub mod callbacks;
 pub mod connections;
@@ -19,6 +20,7 @@ pub mod store;
 pub mod theme;
 pub mod viewport;
 
+pub use api::*;
 pub use background::*;
 pub use callbacks::*;
 pub use connections::*;

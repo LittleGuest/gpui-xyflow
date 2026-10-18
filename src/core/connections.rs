@@ -56,3 +56,71 @@ pub fn is_valid_connection(source: &str, target: &str, connection_mode: Connecti
 pub fn is_horizontal_handle(handle: &Handle) -> bool {
     handle.position.is_horizontal()
 }
+
+pub fn get_edge_id(
+    source: &str,
+    source_handle: Option<&str>,
+    target: &str,
+    target_handle: Option<&str>,
+) -> String {
+    format!(
+        "xy-edge__{}{}-{}{}",
+        source,
+        source_handle.unwrap_or(""),
+        target,
+        target_handle.unwrap_or("")
+    )
+}
+
+pub fn connection_exists<S: Clone>(edge: &crate::core::edge::Edge<S>, edges: &[crate::core::edge::Edge<S>]) -> bool {
+    edges.iter().any(|candidate| {
+        candidate.source == edge.source
+            && candidate.target == edge.target
+            && (candidate.source_handle == edge.source_handle
+                || (candidate.source_handle.is_none() && edge.source_handle.is_none()))
+            && (candidate.target_handle == edge.target_handle
+                || (candidate.target_handle.is_none() && edge.target_handle.is_none()))
+    })
+}
+
+pub fn add_edge<S: Clone>(
+    edge_params: crate::core::edge::Edge<S>,
+    edges: &[crate::core::edge::Edge<S>],
+    default_edge_options: Option<&crate::core::edge::Edge<S>>,
+) -> Option<Vec<crate::core::edge::Edge<S>>> {
+    if edge_params.source == edge_params.target {
+        return None;
+    }
+    let mut next = edge_params.clone();
+    if next.id.is_empty() {
+        next.id = get_edge_id(
+            &next.source,
+            next.source_handle.as_deref(),
+            &next.target,
+            next.target_handle.as_deref(),
+        );
+    }
+    if let Some(options) = default_edge_options {
+        if next.edge_type.is_none() {
+            next.edge_type = options.edge_type.clone();
+        }
+        if next.animated == false {
+            next.animated = options.animated;
+        }
+        if next.marker_start.is_none() {
+            next.marker_start = options.marker_start.clone();
+        }
+        if next.marker_end.is_none() {
+            next.marker_end = options.marker_end.clone();
+        }
+        if next.label.is_none() {
+            next.label = options.label.clone();
+        }
+    }
+    if connection_exists(&next, edges) {
+        return None;
+    }
+    let mut result = edges.to_vec();
+    result.push(next);
+    Some(result)
+}
