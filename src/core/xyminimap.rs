@@ -137,8 +137,8 @@ pub fn minimap_layout(
     let view_height = view_scale * height;
     let offset = offset_scale * view_scale;
 
-    let x = bounding_rect.x - (view_width - bounding_rect.width) / 2.0 - offset;
-    let y = bounding_rect.y - (view_height - bounding_rect.height) / 2.0 - offset;
+    let _x = bounding_rect.x - (view_width - bounding_rect.width) / 2.0 - offset;
+    let _y = bounding_rect.y - (view_height - bounding_rect.height) / 2.0 - offset;
 
     MinimapLayout {
         view_x: bounding_rect.x,

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::core::edge::Edge;
-use crate::core::geometry::{Box2, CoordinateExtent, Dimensions, NodeOrigin, Rect, SnapGrid, Transform, XYPosition};
+use crate::core::geometry::{CoordinateExtent, Dimensions, NodeOrigin, SnapGrid, Transform, XYPosition};
 use crate::core::node::{
     InternalNode, Node, NodeDragItem, NodeExtent, NodeLookup,
 };
