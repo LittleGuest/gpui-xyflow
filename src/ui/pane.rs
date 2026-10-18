@@ -389,7 +389,11 @@ pub fn paint_selection(window: &mut Window, data: &PaneRenderData) {
         origin: point(origin.x + px(rect.x as f32), origin.y + px(rect.y as f32)),
         size: gpui_kit::size(px(rect.width as f32), px(rect.height as f32)),
     };
-    window.paint_quad(fill(bounds, data.theme.selection_border));
+    window.paint_quad(
+        fill(bounds, data.theme.selection_background)
+            .border_widths(px(1.0))
+            .border_color(data.theme.selection_border),
+    );
 }
 
 pub fn paint_connection(window: &mut Window, data: &PaneRenderData) {
