@@ -129,14 +129,13 @@ impl Flow {
         self.store.props_mut().theme = theme;
     }
 
-    pub fn fit_view(&mut self, window: &mut Window) {
+    pub fn fit_view(&mut self, _window: &mut Window) {
         if let Some(bounds) = self.pane_bounds {
             self.store.set_size(
                 f32::from(bounds.size.width) as f64,
                 f32::from(bounds.size.height) as f64,
             );
             self.store.fit_view();
-            window.request_animation_frame();
         }
     }
 
@@ -480,7 +479,7 @@ impl Flow {
     fn handle_mouse_move(
         &mut self,
         event: &MouseMoveEvent,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let local = self.local_position(event.position);
@@ -524,7 +523,6 @@ impl Flow {
                 self.store.pan_zoom_mut().pointer_move(local);
                 self.store.sync_transform();
                 self.last_pointer = flow_point;
-                window.request_animation_frame();
                 cx.notify();
             }
             DragMode::Connection => {
@@ -629,7 +627,7 @@ impl Flow {
     fn handle_scroll(
         &mut self,
         event: &ScrollWheelEvent,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let (delta_y, delta_mode) = match event.delta {
@@ -654,7 +652,6 @@ impl Flow {
         if let Some(transform) = outcome.transform {
             self.store.set_viewport(transform.viewport());
         }
-        window.request_animation_frame();
         cx.notify();
     }
 }

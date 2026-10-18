@@ -113,7 +113,7 @@ impl Render for Gallery {
                             .text_color(rgb(0x333333))
                             .cursor_pointer()
                             .child(button.label())
-                            .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                            .on_mouse_down(MouseButton::Left, move |_event, _window, cx| {
                                 match button {
                                     ControlButton::ZoomIn => {
                                         flow.update(cx, |flow, _| flow.store_mut().zoom_in());
@@ -133,7 +133,6 @@ impl Render for Gallery {
                                     this.sync_zoom(cx);
                                     cx.notify();
                                 });
-                                window.request_animation_frame();
                             })
                     })),
             )
