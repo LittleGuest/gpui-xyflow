@@ -207,11 +207,8 @@ pub fn node_fill(theme: &FlowTheme, variant: NodeVariant, selected: bool) -> gpu
 }
 
 pub fn node_border(theme: &FlowTheme, selected: bool) -> gpui_kit::Rgba {
-    if selected {
-        theme.node_border_selected
-    } else {
-        theme.node_border
-    }
+    let _ = selected;
+    theme.node_border
 }
 
 pub fn node_text_color(theme: &FlowTheme, _variant: NodeVariant) -> gpui_kit::Rgba {

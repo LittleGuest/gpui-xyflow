@@ -198,12 +198,13 @@ fn paint_edge_markers(
     if samples.len() < 2 {
         return;
     }
+    let scale = 0.625 * data.theme.edge_stroke_width as f64;
 
     if let Some(spec) = &edge.markers.end {
         let last = samples[samples.len() - 1];
         let prev = samples[samples.len() - 2];
         let direction = (last.x - prev.x, last.y - prev.y);
-        let points = marker_polygon_points(spec, last, direction);
+        let points = marker_polygon_points(last, direction, scale);
         paint_marker_polygon(window, data, &points, spec, color);
     }
 
@@ -211,36 +212,29 @@ fn paint_edge_markers(
         let first = samples[0];
         let second = samples[1];
         let direction = (first.x - second.x, first.y - second.y);
-        let points = marker_polygon_points(spec, first, direction);
+        let points = marker_polygon_points(first, direction, scale);
         paint_marker_polygon(window, data, &points, spec, color);
     }
 }
 
 fn marker_polygon_points(
-    spec: &MarkerSpec,
     tip: crate::ui::paths::SvgPoint,
     direction: (f64, f64),
+    scale: f64,
 ) -> Vec<(f64, f64)> {
-    use crate::{core::geometry::XYPosition, ui::marker::MarkerVariant};
+    use crate::core::geometry::XYPosition;
 
-    let scale = spec.width / 10.0;
-    let ref_x = 9.0;
-    let ref_y = 5.0;
     let len = (direction.0 * direction.0 + direction.1 * direction.1).sqrt();
     if len == 0.0 {
         return Vec::new();
     }
     let d = (direction.0 / len, direction.1 / len);
     let perp = (-d.1, d.0);
-    let local: &[(f64, f64)] = match spec.variant {
-        MarkerVariant::ArrowClosed => &[(0.0, 0.0), (10.0, 5.0), (0.0, 10.0), (5.0, 5.0)],
-        MarkerVariant::Arrow => &[(0.0, 0.0), (10.0, 5.0), (0.0, 10.0)],
-    };
-    local
+    [(-5.0, -4.0), (0.0, 0.0), (-5.0, 4.0)]
         .iter()
         .map(|(lx, ly)| {
-            let u = (lx - ref_x) * scale;
-            let v = (ly - ref_y) * scale;
+            let u = lx * scale;
+            let v = ly * scale;
             let world = XYPosition::new(tip.x + d.0 * u + perp.0 * v, tip.y + d.1 * u + perp.1 * v);
             (world.x, world.y)
         })
@@ -325,7 +319,7 @@ pub fn paint_nodes(window: &mut Window, data: &PaneRenderData, cx: &mut App) {
         let border_width = if node.selected { 1.5 } else { 1.0 } as f32;
         window.paint_quad(
             fill(bounds, fill_color)
-                .corner_radii(px(4.0))
+                .corner_radii(px(data.theme.node_border_radius))
                 .border_widths(px(border_width))
                 .border_color(border_color),
         );
