@@ -4,11 +4,11 @@ use crate::core::geometry::{
 };
 use crate::core::utils::{clamp, is_numeric};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PanOnDrag {
     Disabled,
     Enabled,
-    Buttons(u32),
+    Buttons(Vec<u32>),
 }
 
 impl Default for PanOnDrag {
@@ -26,30 +26,28 @@ impl PanOnDrag {
         }
     }
 
-    pub fn is_enabled(self) -> bool {
+    pub fn is_enabled(&self) -> bool {
         !matches!(self, PanOnDrag::Disabled)
     }
 
-    pub fn allows_button(self, button: u32) -> bool {
+    pub fn allows_button(&self, button: u32) -> bool {
         match self {
             PanOnDrag::Disabled => false,
             PanOnDrag::Enabled => button <= 1,
-            PanOnDrag::Buttons(buttons) => (buttons >> button) & 1 == 1,
+            PanOnDrag::Buttons(buttons) => buttons.contains(&button),
         }
     }
 
-    pub fn buttons(self) -> Vec<u32> {
+    pub fn buttons(&self) -> Vec<u32> {
         match self {
             PanOnDrag::Disabled => Vec::new(),
             PanOnDrag::Enabled => vec![0, 1],
-            PanOnDrag::Buttons(buttons) => (0..32u32)
-                .filter(|button| (buttons >> button) & 1 == 1)
-                .collect(),
+            PanOnDrag::Buttons(buttons) => buttons.clone(),
         }
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PanZoomOptions {
     pub min_zoom: f64,
     pub max_zoom: f64,
@@ -197,13 +195,21 @@ pub fn zoom_factor_for_wheel(delta_y: f64, delta_mode: u32, ctrl_key: bool, is_m
     2.0_f64.powf(wheel_delta(delta_y, delta_mode, ctrl_key, is_mac))
 }
 
-pub fn is_right_click_pan(pan_on_drag: PanOnDrag, used_button: u32) -> bool {
+pub fn is_right_click_pan(pan_on_drag: &PanOnDrag, used_button: u32) -> bool {
     used_button == 2 && pan_on_drag.buttons().contains(&2)
 }
 
 pub fn transition_ease_cubic_in_out(t: f64) -> f64 {
-    let t = (t * 2.0).min(1.0);
-    (t * t * t) / 2.0
+    if !t.is_finite() {
+        return 0.0;
+    }
+    let t = t * 2.0;
+    if t <= 1.0 {
+        t * t * t / 2.0
+    } else {
+        let t = t - 2.0;
+        (t * t * t + 2.0) / 2.0
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -292,6 +298,25 @@ impl PanZoom {
 
     pub fn extent_of(&self) -> CoordinateExtent {
         [[0.0, 0.0], [self.extent.width, self.extent.height]]
+    }
+
+    pub fn set_transform(&mut self, transform: Transform) {
+        self.transform = transform;
+        self.state.transform = transform;
+    }
+
+    pub fn constrained_in(
+        &self,
+        viewport: Viewport,
+        extent: CoordinateExtent,
+        translate_extent: CoordinateExtent,
+    ) -> Viewport {
+        let rect = Rect::new(0.0, 0.0, extent[1][0], extent[1][1]);
+        transform_to_viewport(constrain_transform(
+            viewport_to_transform(viewport),
+            rect,
+            translate_extent,
+        ))
     }
 
     pub fn constrained(&self, viewport: Viewport) -> Viewport {

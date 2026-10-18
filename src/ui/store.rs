@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use crate::core::change::{apply_edge_changes, apply_node_changes, EdgeChange, NodeChange};
 use crate::core::connect::{
@@ -8,7 +9,10 @@ use crate::core::connect::{
     UpdateConnectionParams,
 };
 use crate::core::constants::{DEFAULT_NODE_ORIGIN, INFINITE_EXTENT};
-use crate::core::drag::{update_nodes, DragStore, UpdateNodesParams};
+use crate::core::change::{NodePositionChange};
+use crate::core::drag::{
+    parent_expansion_rect, update_nodes, DragStore, UpdateNodesParams,
+};
 use crate::core::edge::{ConnectionLineType, Edge, PathOptions};
 use crate::core::geometry::{
     CoordinateExtent, Dimensions, EdgePosition, NodeOrigin, PanOnScrollMode, Rect, SelectionMode,
@@ -22,11 +26,13 @@ use crate::core::edge::EdgeGraphics;
 use crate::core::node::{HandleType, InternalNode, Node, NodeDragItem, NodeLookup, ParentLookup};
 use crate::core::panzoom::{transform_to_viewport, viewport_to_transform, PanOnDrag, PanZoom, PanZoomOptions};
 use crate::core::store::{
-    adopt_user_nodes, update_node_internals, AdoptOptions, NodeInternalsUpdate,
+    adopt_user_nodes, handle_expand_parent, update_node_internals, AdoptOptions,
+    NodeInternalsUpdate,
 };
 use crate::core::geometry::Padding;
 use crate::core::utils::{box_to_rect, get_rects_overlapping_area, get_viewport_for_bounds, node_to_box};
 use crate::core::xyminimap::minimap_bounds;
+use crate::ui::callbacks::FlowCallbacks;
 use crate::ui::theme::FlowTheme;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,7 +67,7 @@ impl InteractionState {
 }
 
 #[derive(Clone, Debug)]
-pub struct FlowProps {
+pub struct FlowProps<S = String> {
     pub nodes_draggable: bool,
     pub nodes_connectable: bool,
     pub nodes_focusable: bool,
@@ -102,9 +108,36 @@ pub struct FlowProps {
     pub has_default_nodes: bool,
     pub has_default_edges: bool,
     pub theme: FlowTheme,
+    pub rf_id: String,
+    pub width: f64,
+    pub height: f64,
+    pub nodes_selection_active: bool,
+    pub user_selection_active: bool,
+    pub user_selection_rect: Option<Rect>,
+    pub pane_dragging: bool,
+    pub no_pan_class_name: String,
+    pub node_drag_threshold: f64,
+    pub connection_drag_threshold: f64,
+    pub select_nodes_on_drag: bool,
+    pub multi_selection_active: bool,
+    pub fit_view_queued: bool,
+    pub connection_click_start_handle: Option<String>,
+    pub aria_live_message: String,
+    pub auto_pan_on_connect: bool,
+    pub auto_pan_on_node_focus: bool,
+    pub auto_pan_speed: f64,
+    pub lib: String,
+    pub debug: bool,
+    pub auto_pan_on_drag: bool,
+    pub selection_key_code: Option<String>,
+    pub pan_activation_key_code: Option<String>,
+    pub zoom_activation_key_code: Option<String>,
+    pub disable_keyboard_a11y: bool,
+    pub default_edge_options: Option<Edge<String>>,
+    pub callbacks: FlowCallbacks<S>,
 }
 
-impl Default for FlowProps {
+impl<S> Default for FlowProps<S> {
     fn default() -> Self {
         FlowProps {
             nodes_draggable: true,
@@ -147,11 +180,38 @@ impl Default for FlowProps {
             has_default_nodes: false,
             has_default_edges: false,
             theme: FlowTheme::light(),
+            rf_id: "1".to_string(),
+            width: 0.0,
+            height: 0.0,
+            nodes_selection_active: false,
+            user_selection_active: false,
+            user_selection_rect: None,
+            pane_dragging: false,
+            no_pan_class_name: "nopan".to_string(),
+            node_drag_threshold: 1.0,
+            connection_drag_threshold: 1.0,
+            select_nodes_on_drag: true,
+            multi_selection_active: false,
+            fit_view_queued: false,
+            connection_click_start_handle: None,
+            aria_live_message: String::new(),
+            auto_pan_on_connect: true,
+            auto_pan_on_node_focus: false,
+            auto_pan_speed: 15.0,
+            lib: "gpui".to_string(),
+            debug: false,
+            auto_pan_on_drag: true,
+            selection_key_code: Some("Shift".to_string()),
+            pan_activation_key_code: None,
+            zoom_activation_key_code: None,
+            disable_keyboard_a11y: false,
+            default_edge_options: None,
+            callbacks: FlowCallbacks::empty(),
         }
     }
 }
 
-impl FlowProps {
+impl<S> FlowProps<S> {
     pub fn pan_zoom_options(&self) -> PanZoomOptions {
         PanZoomOptions {
             min_zoom: self.min_zoom,
@@ -160,7 +220,7 @@ impl FlowProps {
             zoom_on_scroll: self.zoom_on_scroll,
             zoom_on_pinch: self.zoom_on_pinch,
             zoom_on_double_click: self.zoom_on_double_click,
-            pan_on_drag: self.pan_on_drag,
+            pan_on_drag: self.pan_on_drag.clone(),
             pan_on_scroll: self.pan_on_scroll,
             pan_on_scroll_mode: self.pan_on_scroll_mode,
             pan_on_scroll_speed: 0.5,
@@ -220,7 +280,7 @@ struct DragRuntime {
 }
 
 pub struct FlowStore<S = String> {
-    props: FlowProps,
+    props: FlowProps<S>,
     nodes: Vec<Node<S>>,
     edges: Vec<Edge<S>>,
     node_lookup: NodeLookup<S>,
@@ -235,10 +295,17 @@ pub struct FlowStore<S = String> {
     connection: ConnectionState<S>,
     pan_zoom: PanZoom,
     needs_update: bool,
+    nodes_change_middleware: Vec<Arc<NodeChangeMiddleware<S>>>,
+    edges_change_middleware: Vec<Arc<EdgeChangeMiddleware<S>>>,
 }
 
+pub type NodeChangeMiddleware<S> =
+    dyn Fn(Vec<NodeChange<S>>, &[Node<S>]) -> Vec<NodeChange<S>> + Send + Sync;
+pub type EdgeChangeMiddleware<S> =
+    dyn Fn(Vec<EdgeChange<S>>, &[Edge<S>]) -> Vec<EdgeChange<S>> + Send + Sync;
+
 impl<S: Clone + PartialEq> FlowStore<S> {
-    pub fn new(props: FlowProps) -> Self {
+    pub fn new(props: FlowProps<S>) -> Self {
         let pan_zoom = PanZoom::new(props.default_viewport, props.pan_zoom_options());
         FlowStore {
             props,
@@ -256,18 +323,20 @@ impl<S: Clone + PartialEq> FlowStore<S> {
             connection: ConnectionState::Idle(NoConnection::default()),
             pan_zoom,
             needs_update: false,
+            nodes_change_middleware: Vec::new(),
+            edges_change_middleware: Vec::new(),
         }
     }
 
-    pub fn props(&self) -> &FlowProps {
+    pub fn props(&self) -> &FlowProps<S> {
         &self.props
     }
 
-    pub fn props_mut(&mut self) -> &mut FlowProps {
+    pub fn props_mut(&mut self) -> &mut FlowProps<S> {
         &mut self.props
     }
 
-    pub fn set_props(&mut self, props: FlowProps) {
+    pub fn set_props(&mut self, props: FlowProps<S>) {
         self.pan_zoom.set_options(props.pan_zoom_options());
         self.props = props;
         self.needs_update = true;
@@ -411,6 +480,173 @@ impl<S: Clone + PartialEq> FlowStore<S> {
     pub fn apply_edge_changes(&mut self, changes: &[EdgeChange<S>]) {
         self.edges = apply_edge_changes(changes, &self.edges);
         self.needs_update = true;
+    }
+
+    pub fn trigger_node_changes(&mut self, changes: Vec<NodeChange<S>>) {
+        if changes.is_empty() {
+            return;
+        }
+        if self.props.has_default_nodes {
+            self.apply_node_changes(&changes);
+        }
+        if let Some(handler) = self.props.callbacks.on_nodes_change.clone() {
+            handler(&changes);
+        }
+    }
+
+    pub fn trigger_edge_changes(&mut self, changes: Vec<EdgeChange<S>>) {
+        if changes.is_empty() {
+            return;
+        }
+        if self.props.has_default_edges {
+            self.apply_edge_changes(&changes);
+        }
+        if let Some(handler) = self.props.callbacks.on_edges_change.clone() {
+            handler(&changes);
+        }
+    }
+
+    pub fn apply_nodes_change_middleware(&self, changes: Vec<NodeChange<S>>) -> Vec<NodeChange<S>> {
+        let mut current = changes;
+        for middleware in self.nodes_change_middleware.iter() {
+            current = middleware(current, &self.nodes);
+        }
+        current
+    }
+
+    pub fn apply_edges_change_middleware(&self, changes: Vec<EdgeChange<S>>) -> Vec<EdgeChange<S>> {
+        let mut current = changes;
+        for middleware in self.edges_change_middleware.iter() {
+            current = middleware(current, &self.edges);
+        }
+        current
+    }
+
+    pub fn add_nodes_change_middleware<F>(&mut self, middleware: F)
+    where
+        F: Fn(Vec<NodeChange<S>>, &[Node<S>]) -> Vec<NodeChange<S>> + Send + Sync + 'static,
+    {
+        self.nodes_change_middleware.push(Arc::new(middleware));
+    }
+
+    pub fn add_edges_change_middleware<F>(&mut self, middleware: F)
+    where
+        F: Fn(Vec<EdgeChange<S>>, &[Edge<S>]) -> Vec<EdgeChange<S>> + Send + Sync + 'static,
+    {
+        self.edges_change_middleware.push(Arc::new(middleware));
+    }
+
+    pub fn update_node_positions(&mut self, drag_items: &[NodeDragItem], dragging: bool) {
+        let mut changes: Vec<NodeChange<S>> = Vec::with_capacity(drag_items.len());
+        for item in drag_items {
+            let position = if item.expand_parent {
+                XYPosition {
+                    x: item.position.x.max(0.0),
+                    y: item.position.y.max(0.0),
+                }
+            } else {
+                item.position
+            };
+            changes.push(NodeChange::Position(NodePositionChange {
+                id: item.id.clone(),
+                position: Some(position),
+                position_absolute: Some(item.position_absolute),
+                dragging: Some(dragging),
+            }));
+        }
+        let children: Vec<(String, String, Rect)> = drag_items
+            .iter()
+            .filter(|item| item.expand_parent)
+            .filter_map(|item| {
+                let parent_id = item.parent_id.clone()?;
+                Some((item.id.clone(), parent_id, parent_expansion_rect(item)))
+            })
+            .collect();
+        if !children.is_empty() {
+            changes.extend(handle_expand_parent(
+                &children,
+                &self.node_lookup,
+                &self.parent_lookup,
+                self.props.node_origin,
+            ));
+        }
+        let changes = self.apply_nodes_change_middleware(changes);
+        self.trigger_node_changes(changes);
+    }
+
+    pub fn set_min_zoom(&mut self, min_zoom: f64) {
+        if !min_zoom.is_finite() || min_zoom == self.props.min_zoom {
+            return;
+        }
+        self.props.min_zoom = min_zoom;
+        self.pan_zoom
+            .set_scale_extent(self.props.min_zoom, self.props.max_zoom);
+    }
+
+    pub fn set_max_zoom(&mut self, max_zoom: f64) {
+        if !max_zoom.is_finite() || max_zoom == self.props.max_zoom {
+            return;
+        }
+        self.props.max_zoom = max_zoom;
+        self.pan_zoom
+            .set_scale_extent(self.props.min_zoom, self.props.max_zoom);
+    }
+
+    pub fn set_translate_extent(&mut self, extent: CoordinateExtent) {
+        if extent == self.props.translate_extent {
+            return;
+        }
+        self.props.translate_extent = extent;
+        self.pan_zoom.set_translate_extent(extent);
+    }
+
+    pub fn set_node_extent(&mut self, node_extent: CoordinateExtent) {
+        if node_extent == self.props.node_extent {
+            return;
+        }
+        self.props.node_extent = node_extent;
+        let mut options = self.props.adopt_options();
+        options.check_equality = false;
+        let mut parent_lookup = std::mem::take(&mut self.parent_lookup);
+        adopt_user_nodes(
+            &self.nodes,
+            &mut self.node_lookup,
+            &mut parent_lookup,
+            &options,
+        );
+        self.parent_lookup = parent_lookup;
+    }
+
+    pub fn set_default_nodes_and_edges(&mut self, nodes: Vec<Node<S>>, edges: Vec<Edge<S>>) {
+        self.nodes = nodes;
+        self.edges = edges;
+        self.props.has_default_nodes = true;
+        self.props.has_default_edges = true;
+        self.needs_update = true;
+    }
+
+    pub fn queued_fit_view(&self) -> bool {
+        self.props.fit_view_queued
+    }
+
+    pub fn request_fit_view(&mut self) {
+        self.props.fit_view_queued = true;
+    }
+
+    pub fn resolve_fit_view(&mut self) -> bool {
+        let bounds = self.tight_bounds();
+        if bounds.width > 0.0 && bounds.height > 0.0 && self.size.width > 0.0 && self.size.height > 0.0
+        {
+            self.fit_bounds(bounds, self.props.fit_view_padding);
+        }
+        self.props.fit_view_queued = false;
+        true
+    }
+
+    pub fn maybe_resolve_fit_view(&mut self) {
+        if self.props.fit_view_queued && self.nodes_initialized {
+            self.resolve_fit_view();
+        }
     }
 
     pub fn update_nodes(&mut self) {
@@ -834,6 +1070,8 @@ impl<S: Clone + PartialEq> FlowStore<S> {
             connection: self.connection.clone(),
             pan_zoom: self.pan_zoom.clone(),
             needs_update: self.needs_update,
+            nodes_change_middleware: self.nodes_change_middleware.clone(),
+            edges_change_middleware: self.edges_change_middleware.clone(),
         }
     }
 

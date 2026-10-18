@@ -1,4 +1,5 @@
 pub mod background;
+pub mod callbacks;
 pub mod connections;
 pub mod controls;
 pub mod edge_renderer;
@@ -17,6 +18,7 @@ pub mod theme;
 pub mod viewport;
 
 pub use background::*;
+pub use callbacks::*;
 pub use connections::*;
 pub use controls::*;
 pub use edge_renderer::*;
