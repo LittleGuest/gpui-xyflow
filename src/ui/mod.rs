@@ -19,7 +19,9 @@ pub mod panel;
 pub mod paths;
 pub mod resizer;
 pub mod store;
+pub mod store_updater;
 pub mod theme;
+pub mod toolbars;
 pub mod viewport;
 
 pub use api::*;
@@ -43,5 +45,7 @@ pub use panel::*;
 pub use paths::*;
 pub use resizer::*;
 pub use store::*;
+pub use store_updater::*;
 pub use theme::*;
+pub use toolbars::*;
 pub use viewport::*;
