@@ -400,3 +400,206 @@ pub fn is_handle_position(position: &str) -> bool {
 pub fn is_line_position(position: &str) -> bool {
     RESIZER_LINE_POSITIONS.contains(&position)
 }
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct XYResizerOptions {
+    pub keep_aspect_ratio: bool,
+    pub node_origin: NodeOrigin,
+    pub extent: Option<CoordinateExtent>,
+    pub child_extent: Option<CoordinateExtent>,
+    pub boundaries: Boundaries,
+    pub snap_to_grid: bool,
+    pub snap_grid: crate::core::geometry::SnapGrid,
+}
+
+impl Default for XYResizerOptions {
+    fn default() -> Self {
+        XYResizerOptions {
+            keep_aspect_ratio: false,
+            node_origin: crate::core::constants::DEFAULT_NODE_ORIGIN,
+            extent: None,
+            child_extent: None,
+            boundaries: Boundaries::with_defaults(0.0, 0.0),
+            snap_to_grid: false,
+            snap_grid: [1.0, 1.0],
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResizePhase {
+    Idle,
+    Resizing,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct XYResizerChange {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub direction: [f64; 2],
+}
+
+#[derive(Clone, Debug)]
+pub struct XYResizer {
+    options: XYResizerOptions,
+    phase: ResizePhase,
+    start: Option<ResizeStartValues>,
+    control: Option<ControlDirection>,
+    control_position: Option<String>,
+    last: Option<XYResizerChange>,
+    child_changes: Vec<(String, XYResizerChange)>,
+}
+
+impl Default for XYResizer {
+    fn default() -> Self {
+        Self::new(XYResizerOptions::default())
+    }
+}
+
+impl XYResizer {
+    pub fn new(options: XYResizerOptions) -> Self {
+        XYResizer {
+            options,
+            phase: ResizePhase::Idle,
+            start: None,
+            control: None,
+            control_position: None,
+            last: None,
+            child_changes: Vec::new(),
+        }
+    }
+
+    pub fn options(&self) -> &XYResizerOptions {
+        &self.options
+    }
+
+    pub fn set_options(&mut self, options: XYResizerOptions) {
+        self.options = options;
+    }
+
+    pub fn phase(&self) -> ResizePhase {
+        self.phase
+    }
+
+    pub fn is_resizing(&self) -> bool {
+        self.phase == ResizePhase::Resizing
+    }
+
+    pub fn last(&self) -> Option<&XYResizerChange> {
+        self.last.as_ref()
+    }
+
+    pub fn child_changes(&self) -> &[(String, XYResizerChange)] {
+        &self.child_changes
+    }
+
+    pub fn start(&mut self, control_position: &str, params: ResizeParams, pointer: XYPosition) {
+        self.phase = ResizePhase::Resizing;
+        self.start = Some(ResizeStartValues::from_params(params, pointer));
+        self.control = Some(get_control_direction(control_position));
+        self.control_position = Some(control_position.to_string());
+        self.last = None;
+        self.child_changes.clear();
+    }
+
+    pub fn resize(&mut self, pointer: XYPosition) -> Option<XYResizerChange> {
+        let start = self.start?;
+        let control = self.control?;
+        if self.phase != ResizePhase::Resizing {
+            return None;
+        }
+
+        let pointer = if self.options.snap_to_grid {
+            XYPosition::new(
+                (pointer.x / self.options.snap_grid[0]).round() * self.options.snap_grid[0],
+                (pointer.y / self.options.snap_grid[1]).round() * self.options.snap_grid[1],
+            )
+        } else {
+            pointer
+        };
+
+        let dimensions = get_dimensions_after_resize(
+            start,
+            control,
+            pointer,
+            self.options.boundaries,
+            self.options.keep_aspect_ratio,
+            self.options.node_origin,
+            self.options.extent,
+            self.options.child_extent,
+        );
+
+        let direction = get_resize_direction(
+            dimensions.width,
+            start.width,
+            dimensions.height,
+            start.height,
+            control.affects_x,
+            control.affects_y,
+        );
+
+        let change = XYResizerChange {
+            x: dimensions.x,
+            y: dimensions.y,
+            width: dimensions.width,
+            height: dimensions.height,
+            direction,
+        };
+        self.last = Some(change.clone());
+        Some(change)
+    }
+
+    pub fn end(&mut self) -> Option<XYResizerChange> {
+        let last = self.last.take();
+        self.phase = ResizePhase::Idle;
+        self.start = None;
+        self.control = None;
+        self.control_position = None;
+        self.child_changes.clear();
+        last
+    }
+
+    pub fn cancel(&mut self) {
+        self.phase = ResizePhase::Idle;
+        self.start = None;
+        self.control = None;
+        self.control_position = None;
+        self.last = None;
+        self.child_changes.clear();
+    }
+
+    pub fn set_child_extents(
+        &mut self,
+        children: Vec<(String, ResizeParams)>,
+    ) {
+        self.child_changes = children
+            .into_iter()
+            .map(|(id, params)| {
+                (
+                    id,
+                    XYResizerChange {
+                        x: params.x,
+                        y: params.y,
+                        width: params.width,
+                        height: params.height,
+                        direction: [0.0, 0.0],
+                    },
+                )
+            })
+            .collect();
+    }
+
+    pub fn control_position(&self) -> Option<&str> {
+        self.control_position.as_deref()
+    }
+
+    pub fn is_handle(control_position: &str) -> bool {
+        is_handle_position(control_position)
+    }
+
+    pub fn is_line(control_position: &str) -> bool {
+        is_line_position(control_position)
+    }
+}

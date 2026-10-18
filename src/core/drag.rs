@@ -329,3 +329,262 @@ pub fn node_dimensions_of<S: Clone>(node: &Node<S>) -> Dimensions {
 pub fn should_skip_child(node: &InternalNode<String>, node_lookup: &NodeLookup) -> bool {
     node.parent_id.is_some() && is_parent_selected(node, node_lookup)
 }
+
+pub fn has_selector(target_classes: &[String], selector: &str, ancestors: &[Vec<String>]) -> bool {
+    let selector = selector.trim_start_matches('.');
+    if selector.is_empty() {
+        return false;
+    }
+    if target_classes.iter().any(|class| class == selector) {
+        return true;
+    }
+    ancestors
+        .iter()
+        .any(|classes| classes.iter().any(|class| class == selector))
+}
+
+pub fn get_event_handler_params<S: Clone>(
+    node_id: Option<&str>,
+    drag_items: &BTreeMap<String, NodeDragItem>,
+    node_lookup: &NodeLookup<S>,
+    dragging: bool,
+) -> (Option<Node<S>>, Vec<Node<S>>) {
+    let mut nodes_from_drag_items: Vec<Node<S>> = Vec::new();
+
+    for (id, drag_item) in drag_items {
+        if let Some(node) = node_lookup.get(id) {
+            let mut user_node = node.internals.user_node.clone();
+            user_node.position = drag_item.position;
+            user_node.dragging = dragging;
+            nodes_from_drag_items.push(user_node);
+        }
+    }
+
+    let Some(node_id) = node_id else {
+        return (nodes_from_drag_items.first().cloned(), nodes_from_drag_items);
+    };
+
+    let first = match node_lookup.get(node_id) {
+        Some(node) => {
+            let mut user_node = node.internals.user_node.clone();
+            user_node.position = drag_items
+                .get(node_id)
+                .map(|item| item.position)
+                .unwrap_or(node.position);
+            user_node.dragging = dragging;
+            Some(user_node)
+        }
+        None => nodes_from_drag_items.first().cloned(),
+    };
+
+    (first, nodes_from_drag_items)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DragPhase {
+    Idle,
+    Pressed,
+    Dragging,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct XYDragOptions {
+    pub node_drag_threshold: f64,
+    pub no_drag_class_name: Option<String>,
+    pub handle_selector: Option<String>,
+    pub auto_pan_on_node_drag: bool,
+    pub auto_pan_speed: f64,
+    pub snap_to_grid: bool,
+    pub snap_grid: crate::core::geometry::SnapGrid,
+    pub nodes_draggable: bool,
+}
+
+impl Default for XYDragOptions {
+    fn default() -> Self {
+        XYDragOptions {
+            node_drag_threshold: 1.0,
+            no_drag_class_name: None,
+            handle_selector: None,
+            auto_pan_on_node_drag: true,
+            auto_pan_speed: 15.0,
+            snap_to_grid: false,
+            snap_grid: [1.0, 1.0],
+            nodes_draggable: true,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct XYDrag {
+    options: XYDragOptions,
+    phase: DragPhase,
+    press_pointer: Option<XYPosition>,
+    drag_items: BTreeMap<String, NodeDragItem>,
+    active_node_id: Option<String>,
+    started: bool,
+}
+
+impl Default for XYDrag {
+    fn default() -> Self {
+        Self::new(XYDragOptions::default())
+    }
+}
+
+impl XYDrag {
+    pub fn new(options: XYDragOptions) -> Self {
+        XYDrag {
+            options,
+            phase: DragPhase::Idle,
+            press_pointer: None,
+            drag_items: BTreeMap::new(),
+            active_node_id: None,
+            started: false,
+        }
+    }
+
+    pub fn options(&self) -> &XYDragOptions {
+        &self.options
+    }
+
+    pub fn set_options(&mut self, options: XYDragOptions) {
+        self.options = options;
+    }
+
+    pub fn phase(&self) -> DragPhase {
+        self.phase
+    }
+
+    pub fn drag_items(&self) -> &BTreeMap<String, NodeDragItem> {
+        &self.drag_items
+    }
+
+    pub fn has_started(&self) -> bool {
+        self.started
+    }
+
+    pub fn active_node_id(&self) -> Option<&str> {
+        self.active_node_id.as_deref()
+    }
+
+    pub fn can_start(
+        &self,
+        target_classes: &[String],
+        ancestors: &[Vec<String>],
+    ) -> bool {
+        if let Some(class_name) = &self.options.no_drag_class_name {
+            if has_selector(target_classes, class_name, ancestors) {
+                return false;
+            }
+        }
+        if let Some(selector) = &self.options.handle_selector {
+            return has_selector(target_classes, selector, ancestors);
+        }
+        true
+    }
+
+    pub fn on_pointer_down<S: Clone>(
+        &mut self,
+        pointer: XYPosition,
+        node_id: Option<&str>,
+        node_lookup: &NodeLookup<S>,
+    ) -> bool {
+        self.drag_items = crate::core::store::get_drag_items(
+            node_lookup,
+            self.options.nodes_draggable,
+            pointer,
+            node_id,
+        );
+        if self.drag_items.is_empty() {
+            self.phase = DragPhase::Idle;
+            self.press_pointer = None;
+            self.started = false;
+            return false;
+        }
+        self.phase = DragPhase::Pressed;
+        self.press_pointer = Some(pointer);
+        self.active_node_id = node_id.map(|id| id.to_string());
+        self.started = false;
+        true
+    }
+
+    pub fn on_pointer_move<S: Clone>(
+        &mut self,
+        pointer: XYPosition,
+        node_lookup: &NodeLookup<S>,
+        mut calculate: impl FnMut(&mut NodeDragItem, &NodeLookup<S>),
+    ) -> DragUpdate {
+        if self.phase == DragPhase::Idle {
+            return DragUpdate::default();
+        }
+
+        if let Some(start) = self.press_pointer {
+            let distance =
+                ((pointer.x - start.x).powi(2) + (pointer.y - start.y).powi(2)).sqrt();
+            if distance < self.options.node_drag_threshold {
+                return DragUpdate::default();
+            }
+        }
+
+        self.phase = DragPhase::Dragging;
+        self.started = true;
+
+        for item in self.drag_items.values_mut() {
+            calculate(item, node_lookup);
+        }
+
+        let mut positions: BTreeMap<String, NodePositionUpdate> = BTreeMap::new();
+        let mut parent_expansions: Vec<(String, String, crate::core::geometry::Rect)> = Vec::new();
+        for item in self.drag_items.values() {
+            positions.insert(
+                item.id.clone(),
+                NodePositionUpdate {
+                    position: item.position,
+                    position_absolute: item.position_absolute,
+                },
+            );
+            if item.expand_parent {
+                if let Some(parent_id) = item.parent_id.clone() {
+                    parent_expansions.push((
+                        item.id.clone(),
+                        parent_id,
+                        parent_expansion_rect(item),
+                    ));
+                }
+            }
+        }
+
+        let changed = !positions.is_empty();
+        let single_node_position = self
+            .active_node_id
+            .as_ref()
+            .and_then(|id| self.drag_items.get(id))
+            .map(|item| item.position);
+
+        DragUpdate {
+            changed,
+            items: self.drag_items.clone(),
+            positions,
+            parent_expansions,
+            single_node_position,
+        }
+    }
+
+    pub fn on_pointer_up(&mut self) -> (bool, Vec<NodeDragItem>) {
+        let dragged = self.started;
+        let items: Vec<NodeDragItem> = self.drag_items.values().cloned().collect();
+        self.phase = DragPhase::Idle;
+        self.press_pointer = None;
+        self.started = false;
+        self.active_node_id = None;
+        self.drag_items.clear();
+        (dragged, items)
+    }
+
+    pub fn cancel(&mut self) {
+        self.phase = DragPhase::Idle;
+        self.press_pointer = None;
+        self.started = false;
+        self.active_node_id = None;
+        self.drag_items.clear();
+    }
+}
