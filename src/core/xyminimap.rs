@@ -280,3 +280,139 @@ pub fn minimap_color_for<S: Clone>(node: &InternalNode<S>, default_color: &str) 
         default_color.to_string()
     }
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MinimapPhase {
+    Idle,
+    Panning,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct XYMinimapConfig {
+    pub update: MinimapUpdate,
+    pub phase: MinimapPhase,
+    pub pan_start: Option<XYPosition>,
+    pub pointer: Option<XYPosition>,
+    pub destroyed: bool,
+    pub scale_extent: (f64, f64),
+}
+
+impl Default for XYMinimapConfig {
+    fn default() -> Self {
+        XYMinimapConfig {
+            update: MinimapUpdate::default(),
+            phase: MinimapPhase::Idle,
+            pan_start: None,
+            pointer: None,
+            destroyed: false,
+            scale_extent: (0.0, f64::INFINITY),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct MinimapPanResult {
+    pub viewport: Viewport,
+    pub delta: XYPosition,
+}
+
+#[derive(Clone, Debug)]
+pub struct XYMinimap {
+    config: XYMinimapConfig,
+}
+
+impl Default for XYMinimap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl XYMinimap {
+    pub fn new() -> Self {
+        XYMinimap {
+            config: XYMinimapConfig::default(),
+        }
+    }
+
+    pub fn config(&self) -> &XYMinimapConfig {
+        &self.config
+    }
+
+    pub fn update(&mut self, update: MinimapUpdate) {
+        self.config.update = update;
+        self.config.destroyed = false;
+    }
+
+    pub fn destroy(&mut self) {
+        self.config.destroyed = true;
+        self.config.phase = MinimapPhase::Idle;
+        self.config.pan_start = None;
+    }
+
+    pub fn destroyed(&self) -> bool {
+        self.config.destroyed
+    }
+
+    pub fn set_scale_extent(&mut self, min_zoom: f64, max_zoom: f64) {
+        self.config.scale_extent = (min_zoom, max_zoom);
+    }
+
+    pub fn wheel(&mut self, viewport: Viewport, delta_y: f64, ctrl_key: bool, is_mac_os: bool) -> Option<Viewport> {
+        if self.config.destroyed || !self.config.update.zoomable {
+            return None;
+        }
+        let factor = if ctrl_key && is_mac_os { 10.0 } else { 1.0 };
+        let mode_factor = 0.002;
+        let pinch_delta = -delta_y * mode_factor * factor;
+        let next = minimap_zoom(
+            viewport,
+            pinch_delta,
+            self.config.update.zoom_step,
+            self.config.scale_extent,
+        );
+        self.config.pointer = None;
+        Some(next)
+    }
+
+    pub fn pan_start(&mut self, pointer: XYPosition) {
+        if self.config.destroyed || !self.config.update.pannable {
+            return;
+        }
+        self.config.phase = MinimapPhase::Panning;
+        self.config.pan_start = Some(pointer);
+        self.config.pointer = Some(pointer);
+    }
+
+    pub fn pan_move(&mut self, viewport: Viewport, pointer: XYPosition, view_scale: f64) -> Option<MinimapPanResult> {
+        if self.config.destroyed || self.config.phase != MinimapPhase::Panning {
+            return None;
+        }
+        let start = self.config.pan_start?;
+        let delta = XYPosition::new(pointer.x - start.x, pointer.y - start.y);
+        self.config.pan_start = Some(pointer);
+        self.config.pointer = Some(pointer);
+        let next = minimap_pan(viewport, delta, view_scale, self.config.update.inverse_pan);
+        Some(MinimapPanResult {
+            viewport: next,
+            delta,
+        })
+    }
+
+    pub fn pan_end(&mut self) {
+        self.config.phase = MinimapPhase::Idle;
+        self.config.pan_start = None;
+        self.config.pointer = None;
+    }
+
+    pub fn phase(&self) -> MinimapPhase {
+        self.config.phase
+    }
+
+    pub fn pointer(&self) -> Option<XYPosition> {
+        self.config.pointer
+    }
+
+    pub fn is_panning(&self) -> bool {
+        self.config.phase == MinimapPhase::Panning
+    }
+}

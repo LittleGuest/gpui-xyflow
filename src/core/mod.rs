@@ -13,6 +13,7 @@ pub mod store;
 pub mod utils;
 pub mod xyminimap;
 pub mod xypanzoom;
+pub mod xyhandle;
 pub mod xyresizer;
 
 pub use change::*;
@@ -30,4 +31,5 @@ pub use store::*;
 pub use utils::*;
 pub use xyminimap::*;
 pub use xypanzoom::*;
+pub use xyhandle::*;
 pub use xyresizer::*;

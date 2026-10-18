@@ -77,14 +77,17 @@ pub struct ViewportTransition {
 }
 
 pub fn interpolate_zoom(from: Viewport, to: Viewport, t: f64) -> Viewport {
-    let scale = from.zoom * (to.zoom / from.zoom).powf(t);
-    let x = (from.x - to.x * scale / to.zoom) * (1.0 - t) + from.x * t;
-    let y = (from.y - to.y * scale / to.zoom) * (1.0 - t) + from.y * t;
-    Viewport {
-        x,
-        y,
-        zoom: scale,
+    let t = t.clamp(0.0, 1.0);
+    if from.zoom == to.zoom {
+        return interpolate_linear(from, to, t);
     }
+    let r = (to.zoom / from.zoom).ln();
+    let k = 2.0 * (r / 2.0).sinh();
+    let sinh_t = ((r * t).exp() - 1.0) / k;
+    let zoom = from.zoom * (to.zoom / from.zoom).powf(t);
+    let x = from.x + (to.x - from.x) * sinh_t;
+    let y = from.y + (to.y - from.y) * sinh_t;
+    Viewport { x, y, zoom }
 }
 
 pub fn interpolate_linear(from: Viewport, to: Viewport, t: f64) -> Viewport {
