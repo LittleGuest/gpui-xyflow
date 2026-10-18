@@ -6,11 +6,13 @@ use gpui_kit::{
 
 use crate::{
     core::{
+        connect::ConnectionState,
         drag::{CalculateNodePositionParams, XYDrag, XYDragOptions, calculate_node_position},
         edge::Edge,
         geometry::{Rect, XYPosition},
         node::{HandleType, Node},
         utils::snap_position,
+        xyhandle::{XYHandle, XYHandleOptions, XYHandleStartParams},
         xypanzoom::{PointerEvent, PointerEventKind, XYPanZoom},
     },
     ui::{
@@ -37,6 +39,7 @@ pub struct Flow {
     store: FlowStore<String>,
     pan_zoom: XYPanZoom,
     drag: XYDrag,
+    handle: XYHandle<String>,
     focus_handle: FocusHandle,
     drag_mode: DragMode,
     last_pointer: XYPosition,
@@ -57,6 +60,7 @@ impl Flow {
             store,
             pan_zoom,
             drag: XYDrag::default(),
+            handle: XYHandle::new(XYHandleOptions::default()),
             focus_handle: cx.focus_handle(),
             drag_mode: DragMode::None,
             last_pointer: XYPosition::new(0.0, 0.0),
@@ -77,6 +81,7 @@ impl Flow {
             store,
             pan_zoom,
             drag: XYDrag::default(),
+            handle: XYHandle::new(XYHandleOptions::default()),
             focus_handle: cx.focus_handle(),
             drag_mode: DragMode::None,
             last_pointer: XYPosition::new(0.0, 0.0),
@@ -270,6 +275,19 @@ impl Flow {
         self.drag.set_options(options);
     }
 
+    fn sync_handle_options(&mut self) {
+        let props = self.store.props();
+        let options = XYHandleOptions {
+            connection_mode: props.connection_mode,
+            connection_radius: props.connection_radius,
+            drag_threshold: props.connection_drag_threshold,
+            auto_pan_on_connect: props.auto_pan_on_connect,
+            auto_pan_speed: props.auto_pan_speed,
+            lib: props.lib.clone(),
+        };
+        self.handle.set_options(options);
+    }
+
     fn apply_drag_update(
         &mut self,
         positions: &std::collections::BTreeMap<String, crate::core::drag::NodePositionUpdate>,
@@ -316,9 +334,25 @@ impl Flow {
 
         if event.button == MouseButton::Left {
             if let Some((node_id, handle_type, handle_id)) = self.handle_at(flow_point) {
-                self.store
-                    .start_connection(&node_id, handle_type, handle_id.as_deref(), local);
-                self.drag_mode = DragMode::Connection;
+                self.sync_handle_options();
+                let transform = self.store.transform();
+                let lookup = self.store.node_lookup().clone();
+                let started = self.handle.on_pointer_down(
+                    XYHandleStartParams {
+                        node_id: &node_id,
+                        handle_id: handle_id.as_deref(),
+                        handle_type,
+                        pointer: local,
+                        transform,
+                    },
+                    &lookup,
+                );
+                if started {
+                    self.store.set_connection(self.handle.connection().clone());
+                    self.drag_mode = DragMode::Connection;
+                } else {
+                    self.drag_mode = DragMode::None;
+                }
                 cx.notify();
                 return;
             }
@@ -421,7 +455,16 @@ impl Flow {
                 cx.notify();
             }
             DragMode::Connection => {
-                self.store.update_connection(local);
+                let transform = self.store.transform();
+                let lookup = self.store.node_lookup().clone();
+                let is_valid = |_c: &crate::core::edge::Connection| true;
+                if let Some(state) = self
+                    .handle
+                    .on_pointer_move(local, transform, &lookup, &is_valid)
+                {
+                    self.store
+                        .set_connection(ConnectionState::InProgress(state));
+                }
                 cx.notify();
             }
             DragMode::Selection => {
@@ -448,33 +491,30 @@ impl Flow {
                 self.store.sync_transform();
             }
             DragMode::Connection => {
-                if let Some(line) = self.store.connection_line()
-                    && (line.target_x != line.source_x || line.target_y != line.source_y)
+                let state = self.handle.on_pointer_up();
+                if let ConnectionState::InProgress(in_progress) = &state
+                    && let Some(target) = &in_progress.to_node
                 {
-                    let state = self.store.connection_state().clone();
-                    if let crate::core::connect::ConnectionState::InProgress(in_progress) = state
-                        && let Some(target) = in_progress.to_node
-                    {
-                        let target_handle = in_progress
-                            .to_handle
-                            .as_ref()
-                            .and_then(|handle| handle.id.clone());
-                        let source_handle = in_progress.from_handle.id.clone();
-                        let edge: Edge<String> = Edge {
-                            id: format!("{}-{}", in_progress.from_handle.node_id, target.id),
-                            source: in_progress.from_handle.node_id.clone(),
-                            target: target.id.clone(),
-                            source_handle,
-                            target_handle,
-                            ..Edge::default()
-                        };
-                        let mut edges = self.store.edges().to_vec();
-                        edges.push(edge);
-                        self.store.set_edges(edges);
-                        self.store.update_nodes();
-                    }
+                    let target_handle = in_progress
+                        .to_handle
+                        .as_ref()
+                        .and_then(|handle| handle.id.clone());
+                    let source_handle = in_progress.from_handle.id.clone();
+                    let edge: Edge<String> = Edge {
+                        id: format!("{}-{}", in_progress.from_handle.node_id, target.id),
+                        source: in_progress.from_handle.node_id.clone(),
+                        target: target.id.clone(),
+                        source_handle,
+                        target_handle,
+                        ..Edge::default()
+                    };
+                    let mut edges = self.store.edges().to_vec();
+                    edges.push(edge);
+                    self.store.set_edges(edges);
+                    self.store.update_nodes();
                 }
-                self.store.cancel_connection();
+                self.store
+                    .set_connection(ConnectionState::Idle(Default::default()));
             }
             DragMode::Selection => {
                 if let Some(rect) = self.store.interaction().selection_rect() {

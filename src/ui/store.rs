@@ -1073,6 +1073,11 @@ impl<S: Clone + PartialEq> FlowStore<S> {
         &self.connection
     }
 
+    pub fn set_connection(&mut self, state: ConnectionState<S>) {
+        self.connection = state;
+        self.interaction.connecting = self.connection.is_in_progress();
+    }
+
     pub fn connection_line(&self) -> Option<ConnectionLine> {
         match &self.connection {
             ConnectionState::InProgress(state) => Some(ConnectionLine {
