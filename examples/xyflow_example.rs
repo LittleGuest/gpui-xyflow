@@ -53,8 +53,8 @@ fn build_nodes() -> Vec<Node<String>> {
         "1",
         HandleType::Source,
         Position::Bottom,
-        0.5,
-        1.0,
+        72.0,
+        51.0,
     )];
     nodes.push(input);
 
@@ -65,8 +65,8 @@ fn build_nodes() -> Vec<Node<String>> {
         .with_source_position(Position::Bottom)
         .with_target_position(Position::Top);
     middle.handles = vec![
-        Handle::new("2", HandleType::Target, Position::Top, 0.5, 0.0),
-        Handle::new("2", HandleType::Source, Position::Bottom, 0.5, 1.0),
+        Handle::new("2", HandleType::Target, Position::Top, 77.0, -3.0),
+        Handle::new("2", HandleType::Source, Position::Bottom, 77.0, 51.0),
     ];
     nodes.push(middle);
 
@@ -79,8 +79,8 @@ fn build_nodes() -> Vec<Node<String>> {
         "3",
         HandleType::Target,
         Position::Top,
-        0.5,
-        0.0,
+        72.0,
+        -3.0,
     )];
     nodes.push(output);
 

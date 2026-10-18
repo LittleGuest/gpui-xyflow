@@ -60,7 +60,7 @@ pub struct NodeBox {
 }
 
 impl NodeBox {
-    pub fn from_internal<S: Clone>(
+    pub fn from_internal<S: Clone + ToString>(
         node: &InternalNode<S>,
         origin: crate::core::geometry::NodeOrigin,
     ) -> Self {
@@ -77,7 +77,10 @@ impl NodeBox {
             .as_deref()
             .map(NodeVariant::from_str)
             .unwrap_or(NodeVariant::Default);
-        let handles = crate::core::store::collect_handles(&node.internals.user_node.handles);
+        let (source_handles, target_handles) = match &node.internals.handle_bounds {
+            Some(bounds) => (bounds.source.clone(), bounds.target.clone()),
+            None => (Vec::new(), Vec::new()),
+        };
         NodeBox {
             id: node.id.clone(),
             rect,
@@ -85,9 +88,9 @@ impl NodeBox {
             selected: node.selected,
             dragging: node.dragging,
             variant,
-            label: node.id.clone(),
-            source_handles: handles.0,
-            target_handles: handles.1,
+            label: node.data.to_string(),
+            source_handles,
+            target_handles,
         }
     }
 
@@ -131,24 +134,26 @@ impl NodeBox {
 
 pub fn handle_point(rect: &Rect, handle: &Handle) -> XYPosition {
     XYPosition::new(
-        rect.x + rect.width * handle.x + handle.width / 2.0,
-        rect.y + rect.height * handle.y + handle.height / 2.0,
+        rect.x + handle.x + handle.width / 2.0,
+        rect.y + handle.y + handle.height / 2.0,
     )
 }
 
-pub fn default_handle_x(position: Position) -> f64 {
+pub fn default_handle_x(position: Position, width: f64) -> f64 {
+    let half = 3.0;
     match position {
-        Position::Top | Position::Bottom => 0.5,
-        Position::Left => 0.0,
-        Position::Right => 1.0,
+        Position::Top | Position::Bottom => width / 2.0 - half,
+        Position::Left => -half,
+        Position::Right => width - half,
     }
 }
 
-pub fn default_handle_y(position: Position) -> f64 {
+pub fn default_handle_y(position: Position, height: f64) -> f64 {
+    let half = 3.0;
     match position {
-        Position::Top => 0.0,
-        Position::Bottom => 1.0,
-        Position::Left | Position::Right => 0.5,
+        Position::Top => -half,
+        Position::Bottom => height - half,
+        Position::Left | Position::Right => height / 2.0 - half,
     }
 }
 
@@ -158,14 +163,21 @@ pub fn default_handles<S: Clone>(node: &Node<S>) -> Vec<Handle> {
         .as_deref()
         .map(NodeVariant::from_str)
         .unwrap_or(NodeVariant::Default);
+    let dimensions = node.size();
     let mut handles = Vec::new();
     if variant.has_target_handle() {
         handles.push(Handle::new(
             node.id.clone(),
             HandleType::Target,
             node.target_position.unwrap_or(Position::Top),
-            default_handle_x(node.target_position.unwrap_or(Position::Top)),
-            default_handle_y(node.target_position.unwrap_or(Position::Top)),
+            default_handle_x(
+                node.target_position.unwrap_or(Position::Top),
+                dimensions.width,
+            ),
+            default_handle_y(
+                node.target_position.unwrap_or(Position::Top),
+                dimensions.height,
+            ),
         ));
     }
     if variant.has_source_handle() {
@@ -173,8 +185,14 @@ pub fn default_handles<S: Clone>(node: &Node<S>) -> Vec<Handle> {
             node.id.clone(),
             HandleType::Source,
             node.source_position.unwrap_or(Position::Bottom),
-            default_handle_x(node.source_position.unwrap_or(Position::Bottom)),
-            default_handle_y(node.source_position.unwrap_or(Position::Bottom)),
+            default_handle_x(
+                node.source_position.unwrap_or(Position::Bottom),
+                dimensions.width,
+            ),
+            default_handle_y(
+                node.source_position.unwrap_or(Position::Bottom),
+                dimensions.height,
+            ),
         ));
     }
     handles

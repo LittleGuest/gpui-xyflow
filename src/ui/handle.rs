@@ -58,8 +58,8 @@ impl HandleGeometry {
             handle_type: handle.handle_type,
             side: HandleSide::from_position(handle.position),
             center: XYPosition::new(
-                rect.x + rect.width * handle.x + handle.width / 2.0,
-                rect.y + rect.height * handle.y + handle.height / 2.0,
+                rect.x + handle.x + handle.width / 2.0,
+                rect.y + handle.y + handle.height / 2.0,
             ),
             radius,
         }

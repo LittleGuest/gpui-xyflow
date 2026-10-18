@@ -1,4 +1,6 @@
-use gpui_kit::{Bounds, Pixels, Point, Window, fill, point, px};
+use gpui_kit::{
+    App, Bounds, Font, Pixels, Point, SharedString, TextAlign, TextRun, Window, fill, point, px,
+};
 
 use crate::{
     core::geometry::{Rect, Transform},
@@ -6,7 +8,8 @@ use crate::{
         background::{BackgroundPattern, BackgroundVariant, background_color},
         edge_renderer::{EdgeRenderList, EdgeShape, edge_stroke, edge_stroke_width},
         handle::handle_fill,
-        node_renderer::{NodeBox, NodeRenderList, node_border, node_fill},
+        marker::MarkerSpec,
+        node_renderer::{NodeBox, NodeRenderList, node_border, node_fill, node_text_color},
         paint::transformed_stroke_path,
         paths::parse_svg_path,
         store::FlowStore,
@@ -34,7 +37,7 @@ pub fn background_pattern(theme: &FlowTheme, variant: BackgroundVariant) -> Back
     pattern
 }
 
-pub fn build_render_data<S: Clone + PartialEq>(
+pub fn build_render_data<S: Clone + PartialEq + ToString>(
     store: &FlowStore<S>,
     bounds: Bounds<Pixels>,
 ) -> PaneRenderData {
@@ -178,6 +181,123 @@ pub fn paint_edges(window: &mut Window, data: &PaneRenderData) {
             let translated = translate_path(path, origin);
             window.paint_path(translated, color);
         }
+        paint_edge_markers(window, data, edge, color.into());
+    }
+}
+
+fn paint_edge_markers(
+    window: &mut Window,
+    data: &PaneRenderData,
+    edge: &EdgeShape,
+    color: gpui_kit::Hsla,
+) {
+    if edge.markers.is_empty() {
+        return;
+    }
+    let samples = parse_svg_path(&edge.path).sample(64);
+    if samples.len() < 2 {
+        return;
+    }
+
+    if let Some(spec) = &edge.markers.end {
+        let last = samples[samples.len() - 1];
+        let prev = samples[samples.len() - 2];
+        let direction = (last.x - prev.x, last.y - prev.y);
+        let points = marker_polygon_points(spec, last, direction);
+        paint_marker_polygon(window, data, &points, spec, color);
+    }
+
+    if let Some(spec) = &edge.markers.start {
+        let first = samples[0];
+        let second = samples[1];
+        let direction = (first.x - second.x, first.y - second.y);
+        let points = marker_polygon_points(spec, first, direction);
+        paint_marker_polygon(window, data, &points, spec, color);
+    }
+}
+
+fn marker_polygon_points(
+    spec: &MarkerSpec,
+    tip: crate::ui::paths::SvgPoint,
+    direction: (f64, f64),
+) -> Vec<(f64, f64)> {
+    use crate::{core::geometry::XYPosition, ui::marker::MarkerVariant};
+
+    let scale = spec.width / 10.0;
+    let ref_x = 9.0;
+    let ref_y = 5.0;
+    let len = (direction.0 * direction.0 + direction.1 * direction.1).sqrt();
+    if len == 0.0 {
+        return Vec::new();
+    }
+    let d = (direction.0 / len, direction.1 / len);
+    let perp = (-d.1, d.0);
+    let local: &[(f64, f64)] = match spec.variant {
+        MarkerVariant::ArrowClosed => &[(0.0, 0.0), (10.0, 5.0), (0.0, 10.0), (5.0, 5.0)],
+        MarkerVariant::Arrow => &[(0.0, 0.0), (10.0, 5.0), (0.0, 10.0)],
+    };
+    local
+        .iter()
+        .map(|(lx, ly)| {
+            let u = (lx - ref_x) * scale;
+            let v = (ly - ref_y) * scale;
+            let world = XYPosition::new(tip.x + d.0 * u + perp.0 * v, tip.y + d.1 * u + perp.1 * v);
+            (world.x, world.y)
+        })
+        .collect()
+}
+
+fn paint_marker_polygon(
+    window: &mut Window,
+    data: &PaneRenderData,
+    points: &[(f64, f64)],
+    spec: &MarkerSpec,
+    color: gpui_kit::Hsla,
+) {
+    use crate::{core::geometry::XYPosition, ui::marker::MarkerVariant};
+
+    if points.is_empty() {
+        return;
+    }
+    let origin = data.bounds.origin;
+    let to_screen = |x: f64, y: f64| {
+        let screen = data.transform.apply(XYPosition::new(x, y));
+        point(
+            origin.x + px(screen.x as f32),
+            origin.y + px(screen.y as f32),
+        )
+    };
+
+    match spec.variant {
+        MarkerVariant::ArrowClosed => {
+            let mut builder = gpui_kit::PathBuilder::fill();
+            for (index, (x, y)) in points.iter().enumerate() {
+                let screen = to_screen(*x, *y);
+                if index == 0 {
+                    builder.move_to(screen);
+                } else {
+                    builder.line_to(screen);
+                }
+            }
+            builder.close();
+            if let Ok(path) = builder.build() {
+                window.paint_path(path, color);
+            }
+        }
+        MarkerVariant::Arrow => {
+            let mut builder = gpui_kit::PathBuilder::stroke(px(1.0));
+            for (index, (x, y)) in points.iter().enumerate() {
+                let screen = to_screen(*x, *y);
+                if index == 0 {
+                    builder.move_to(screen);
+                } else {
+                    builder.line_to(screen);
+                }
+            }
+            if let Ok(path) = builder.build() {
+                window.paint_path(path, color);
+            }
+        }
     }
 }
 
@@ -188,7 +308,7 @@ fn translate_path(path: gpui_kit::Path<Pixels>, origin: Point<Pixels>) -> gpui_k
     path
 }
 
-pub fn paint_nodes(window: &mut Window, data: &PaneRenderData) {
+pub fn paint_nodes(window: &mut Window, data: &PaneRenderData, cx: &mut App) {
     let origin = data.bounds.origin;
     let zoom = data.transform.zoom();
     for node in &data.nodes.nodes {
@@ -201,23 +321,42 @@ pub fn paint_nodes(window: &mut Window, data: &PaneRenderData) {
             size: gpui_kit::size(px(screen.width as f32), px(screen.height as f32)),
         };
         let fill_color = node_fill(&data.theme, node.variant, node.selected);
-        window.paint_quad(fill(bounds, fill_color));
-
         let border_color = node_border(&data.theme, node.selected);
         let border_width = if node.selected { 1.5 } else { 1.0 } as f32;
-        let mut builder = gpui_kit::PathBuilder::stroke(px(border_width));
-        let left = origin.x + px(screen.x as f32);
-        let top = origin.y + px(screen.y as f32);
-        let right = origin.x + px((screen.x + screen.width) as f32);
-        let bottom = origin.y + px((screen.y + screen.height) as f32);
-        builder.move_to(point(left, top));
-        builder.line_to(point(right, top));
-        builder.line_to(point(right, bottom));
-        builder.line_to(point(left, bottom));
-        builder.close();
-        if let Ok(path) = builder.build() {
-            window.paint_path(path, border_color);
-        }
+        window.paint_quad(
+            fill(bounds, fill_color)
+                .corner_radii(px(4.0))
+                .border_widths(px(border_width))
+                .border_color(border_color),
+        );
+
+        let line_height = 14.0_f32;
+        let run = TextRun {
+            len: node.label.len(),
+            font: Font::default(),
+            color: node_text_color(&data.theme, node.variant).into(),
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        };
+        let shaped = window.text_system().shape_line(
+            SharedString::from(node.label.as_str()),
+            px(12.0),
+            &[run],
+            None,
+        );
+        let text_origin = point(
+            origin.x + px(screen.x as f32),
+            origin.y + px((screen.y + screen.height / 2.0) as f32 - line_height),
+        );
+        let _ = shaped.paint(
+            text_origin,
+            px(line_height),
+            TextAlign::Center,
+            Some(px(screen.width as f32)),
+            window,
+            cx,
+        );
 
         if !node.variant.is_group() {
             for (handle_type, _, center, _, _) in node.handle_positions() {
@@ -229,7 +368,10 @@ pub fn paint_nodes(window: &mut Window, data: &PaneRenderData) {
                     origin: point(cx - px(radius), cy - px(radius)),
                     size: gpui_kit::size(px(radius * 2.0), px(radius * 2.0)),
                 };
-                window.paint_quad(fill(handle_bounds, handle_fill(&data.theme, handle_type)));
+                window.paint_quad(
+                    fill(handle_bounds, handle_fill(&data.theme, handle_type))
+                        .corner_radii(px(radius)),
+                );
             }
         }
     }

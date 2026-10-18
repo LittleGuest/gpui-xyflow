@@ -203,10 +203,12 @@ impl Flow {
                 dimensions.width,
                 dimensions.height,
             );
-            let handles = crate::core::store::collect_handles(&node.internals.user_node.handles);
-            for handle in handles.0.iter().chain(handles.1.iter()) {
-                let center_x = rect.x + rect.width * handle.x + handle.width / 2.0;
-                let center_y = rect.y + rect.height * handle.y + handle.height / 2.0;
+            let Some(bounds) = &node.internals.handle_bounds else {
+                continue;
+            };
+            for handle in bounds.source.iter().chain(bounds.target.iter()) {
+                let center_x = rect.x + handle.x + handle.width / 2.0;
+                let center_y = rect.y + handle.y + handle.height / 2.0;
                 let dx = flow_point.x - center_x;
                 let dy = flow_point.y - center_y;
                 if dx * dx + dy * dy <= radius * radius {
@@ -686,10 +688,10 @@ impl Render for Flow {
                         data.pattern = crate::ui::pane::background_pattern(&theme, pattern);
                         data
                     },
-                    |_bounds, data, window, _cx| {
+                    |_bounds, data, window, cx| {
                         paint_background(window, &data);
                         paint_edges(window, &data);
-                        paint_nodes(window, &data);
+                        paint_nodes(window, &data, cx);
                         paint_connection(window, &data);
                         paint_selection(window, &data);
                     },
