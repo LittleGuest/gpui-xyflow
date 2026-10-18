@@ -1,0 +1,21 @@
+[package]
+name = "gpui-xyflow"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["LittleGuest"]
+repository = "https://github.com/LittleGuest/gpui-xyflow"
+description = "xyflow reimplemented in Rust on top of GPUI Kit: framework independent graph system plus the React Flow UI layer."
+readme = "README.md"
+keywords = ["gpui", "gpui-kit", "xyflow", "flow", "graph"]
+categories = ["gui"]
+
+[lib]
+name = "gpui_xyflow"
+path = "src/lib.rs"
+
+[dependencies]
+gpui-kit = "0.7.3"
+
+[dev-dependencies]
+gpui-kit = { version = "0.7.3", features = ["test-support"] }
