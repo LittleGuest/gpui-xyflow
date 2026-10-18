@@ -9,9 +9,11 @@ use crate::{
         edge::Edge,
         geometry::{Rect, XYPosition},
         node::{HandleType, Node},
+        xypanzoom::{PointerEvent, PointerEventKind, XYPanZoom},
     },
     ui::{
         background::BackgroundVariant,
+        container::{RendererKeyState, derive_renderer_state, zoom_pane_update_options},
         pane::{
             build_render_data, paint_background, paint_connection, paint_edges, paint_nodes,
             paint_selection,
@@ -31,6 +33,7 @@ enum DragMode {
 
 pub struct Flow {
     store: FlowStore<String>,
+    pan_zoom: XYPanZoom,
     focus_handle: FocusHandle,
     drag_mode: DragMode,
     last_pointer: XYPosition,
@@ -41,8 +44,15 @@ pub struct Flow {
 
 impl Flow {
     pub fn new(cx: &mut Context<Self>) -> Self {
+        let store = FlowStore::new(FlowProps::default());
+        let pan_zoom = XYPanZoom::new(
+            store.viewport(),
+            store.props().pan_zoom_options(),
+            store.props().translate_extent,
+        );
         Flow {
-            store: FlowStore::new(FlowProps::default()),
+            store,
+            pan_zoom,
             focus_handle: cx.focus_handle(),
             drag_mode: DragMode::None,
             last_pointer: XYPosition::new(0.0, 0.0),
@@ -53,8 +63,15 @@ impl Flow {
     }
 
     pub fn with_props(props: FlowProps, cx: &mut Context<Self>) -> Self {
+        let store = FlowStore::new(props);
+        let pan_zoom = XYPanZoom::new(
+            store.viewport(),
+            store.props().pan_zoom_options(),
+            store.props().translate_extent,
+        );
         Flow {
-            store: FlowStore::new(props),
+            store,
+            pan_zoom,
             focus_handle: cx.focus_handle(),
             drag_mode: DragMode::None,
             last_pointer: XYPosition::new(0.0, 0.0),
@@ -204,6 +221,35 @@ impl Flow {
         self.store.unselect_nodes_and_edges();
     }
 
+    fn sync_pan_zoom_options(&mut self) {
+        let keys = RendererKeyState::default();
+        let derived = derive_renderer_state(self.store.props(), keys, false);
+        let options = zoom_pane_update_options(
+            self.store.props(),
+            derived,
+            keys,
+            self.store.props().user_selection_active,
+            self.store.connection_state().is_in_progress(),
+        );
+        self.pan_zoom.update(&options);
+    }
+
+    fn pointer_event(
+        &self,
+        kind: PointerEventKind,
+        button: u32,
+        ctrl: bool,
+        shift: bool,
+    ) -> PointerEvent {
+        PointerEvent {
+            kind,
+            button,
+            ctrl_key: ctrl,
+            shift_key: shift,
+            ..PointerEvent::default()
+        }
+    }
+
     fn handle_mouse_down(
         &mut self,
         event: &MouseDownEvent,
@@ -245,16 +291,27 @@ impl Flow {
         } else {
             self.drag_mode = DragMode::Pane;
         }
-        self.store.pan_zoom_mut().pointer_down(
-            match event.button {
-                MouseButton::Left => 0,
-                MouseButton::Right => 2,
-                MouseButton::Middle => 1,
-                _ => 0,
-            },
-            local,
+
+        let button = match event.button {
+            MouseButton::Left => 0,
+            MouseButton::Right => 2,
+            MouseButton::Middle => 1,
+            _ => 0,
+        };
+        let pointer = self.pointer_event(
+            PointerEventKind::MouseDown,
+            button,
             event.modifiers.control,
+            event.modifiers.shift,
         );
+        self.sync_pan_zoom_options();
+        if self.drag_mode == DragMode::Pane && self.pan_zoom.accepts(&pointer) {
+            self.store
+                .pan_zoom_mut()
+                .pointer_down(button, local, event.modifiers.control);
+        } else if self.drag_mode == DragMode::Pane {
+            self.drag_mode = DragMode::None;
+        }
         cx.notify();
     }
 
@@ -355,20 +412,28 @@ impl Flow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let local = self.local_position(event.position);
         let (delta_y, delta_mode) = match event.delta {
             ScrollDelta::Pixels(delta) => (f32::from(delta.y) as f64, 1),
             ScrollDelta::Lines(delta) => (delta.y as f64, 0),
         };
-        self.store.pan_zoom_mut().wheel(
-            local,
+
+        self.sync_pan_zoom_options();
+        self.pan_zoom.sync_viewport(self.store.viewport());
+
+        let pointer = PointerEvent {
+            kind: PointerEventKind::Wheel,
             delta_y,
             delta_mode,
-            event.modifiers.control,
-            cfg!(target_os = "macos"),
-            event.modifiers.shift,
-        );
-        self.store.sync_transform();
+            ctrl_key: event.modifiers.control,
+            shift_key: event.modifiers.shift,
+            ..PointerEvent::default()
+        };
+        let now_ms = 0.0;
+        let outcome = self.pan_zoom.wheel(&pointer, now_ms);
+
+        if let Some(transform) = outcome.transform {
+            self.store.set_viewport(transform.viewport());
+        }
         window.request_animation_frame();
         cx.notify();
     }
