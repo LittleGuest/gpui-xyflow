@@ -1,5 +1,6 @@
 use gpui_kit::*;
 use gpui_xyflow::{
+    BackgroundVariant, ControlsProps, MinimapProps,
     core::{
         edge::{Edge, MarkerType},
         geometry::{Position, XYPosition},
@@ -26,6 +27,10 @@ impl Demo {
             );
             flow.set_nodes(build_nodes());
             flow.set_edges(build_edges());
+            flow.set_pattern(BackgroundVariant::Dots);
+            flow.set_controls(Some(ControlsProps::default()));
+            flow.set_minimap(Some(MinimapProps::default()));
+
             flow
         });
         Demo { flow }

@@ -252,10 +252,10 @@ pub enum ArrowKey {
 impl ArrowKey {
     pub fn from_str(value: &str) -> Option<ArrowKey> {
         match value {
-            "ArrowUp" => Some(ArrowKey::Up),
-            "ArrowDown" => Some(ArrowKey::Down),
-            "ArrowLeft" => Some(ArrowKey::Left),
-            "ArrowRight" => Some(ArrowKey::Right),
+            "ArrowUp" | "up" => Some(ArrowKey::Up),
+            "ArrowDown" | "down" => Some(ArrowKey::Down),
+            "ArrowLeft" | "left" => Some(ArrowKey::Left),
+            "ArrowRight" | "right" => Some(ArrowKey::Right),
             _ => None,
         }
     }

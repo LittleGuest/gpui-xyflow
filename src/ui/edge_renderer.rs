@@ -7,7 +7,7 @@ use crate::{
         edge_path::get_edge_path,
         geometry::{EdgePosition, XYPosition},
     },
-    ui::{marker::MarkerSet, theme::FlowTheme},
+    ui::{marker::MarkerSet, paths::parse_svg_path, store::FlowStore, theme::FlowTheme},
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -158,6 +158,42 @@ pub fn point_near_segment(
     let closest_y = start.y + t * dy;
     let distance = ((point.x - closest_x).powi(2) + (point.y - closest_y).powi(2)).sqrt();
     distance <= tolerance
+}
+
+/// Returns the id of the topmost edge whose interaction stroke contains `point`.
+///
+/// The point is given in flow coordinates, `zoom` is used to keep the interaction
+/// stroke at a constant screen width, mirroring React Flow's interaction path.
+pub fn edge_at_point<S: Clone + PartialEq>(
+    store: &FlowStore<S>,
+    point: XYPosition,
+    zoom: f64,
+) -> Option<String> {
+    let zoom = if zoom <= 0.0 { 1.0 } else { zoom };
+    let mut best: Option<(String, f64)> = None;
+    for edge in store.edges() {
+        if edge.hidden {
+            continue;
+        }
+        let Some(graphics) = store.edge_path_for(edge) else {
+            continue;
+        };
+        let interaction_width = edge.interaction_width.unwrap_or(DEFAULT_INTERACTION_WIDTH);
+        let tolerance = interaction_width / 2.0 / zoom;
+        if tolerance <= 0.0 {
+            continue;
+        }
+        let path = parse_svg_path(&graphics.path);
+        if !edge_hit_test(&path, point, tolerance) {
+            continue;
+        }
+        let z = store.edge_z_index(edge);
+        match &best {
+            Some((_, best_z)) if *best_z > z => {}
+            _ => best = Some((edge.id.clone(), z)),
+        }
+    }
+    best.map(|(id, _)| id)
 }
 
 pub fn edge_hit_test(path: &crate::ui::paths::SvgPath, point: XYPosition, tolerance: f64) -> bool {

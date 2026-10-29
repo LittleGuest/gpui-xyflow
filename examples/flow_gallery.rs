@@ -2,21 +2,23 @@ use gpui_kit::*;
 use gpui_xyflow::{
     core::{
         edge::{Edge, EdgeMarker, EdgeMarkerType, MarkerType},
-        geometry::{Position, XYPosition},
+        geometry::{PanelPosition, Position, Transform, XYPosition},
         node::{Handle, HandleType, Node},
     },
     ui::{
         background::BackgroundVariant,
-        controls::{ControlButton, ControlsProps},
-        flow::Flow,
+        controls::ControlsProps,
+        flow::{ConnectionLineProps, ConnectionLineRenderer, Flow, HandleRenderer, PanelItem},
+        minimap::MinimapProps,
+        resizer::{NodeResizerProps, ResizeControl, ResizeControlRenderer},
         store::FlowProps,
         theme::FlowTheme,
+        toolbars::NodeToolbarProps,
     },
 };
 
 struct Gallery {
     flow: Entity<Flow>,
-    zoom_label: SharedString,
 }
 
 impl Gallery {
@@ -29,6 +31,8 @@ impl Gallery {
                     snap_to_grid: true,
                     snap_grid: [10.0, 10.0],
                     elevate_nodes_on_select: true,
+                    nodes_focusable: true,
+                    edges_focusable: true,
                     ..FlowProps::default()
                 },
                 cx,
@@ -36,106 +40,177 @@ impl Gallery {
             flow.set_pattern(BackgroundVariant::Dots);
             flow.set_nodes(gallery_nodes(dark));
             flow.set_edges(gallery_edges());
+            // 启用元素层节点组件：节点底、边框与标签由 GPUI 元素绘制。
+            flow.set_node_components(true);
+            flow.set_controls(Some(ControlsProps::default()));
+            flow.set_minimap(Some(MinimapProps {
+                margin: 40.0,
+                pannable: true,
+                zoomable: true,
+                ..Default::default()
+            }));
+            let handle_element: HandleRenderer = std::sync::Arc::new(
+                |_node: &Node<String>,
+                 handle: &Handle,
+                 _bounds: Bounds<Pixels>,
+                 _zoom: f64,
+                 _window: &mut Window,
+                 _cx: &mut App| {
+                    let accent = match handle.handle_type {
+                        HandleType::Source => rgb(0x3b82f6),
+                        HandleType::Target => rgb(0x10b981),
+                    };
+                    div()
+                        .size_full()
+                        .rounded(px(4.0))
+                        .bg(rgb(0xffffff))
+                        .border_1()
+                        .border_color(accent)
+                        .into_any_element()
+                },
+            );
+            flow.set_handle_renderer(Some(handle_element));
+            let edge_element: gpui_xyflow::ui::flow::EdgeElementRenderer = std::sync::Arc::new(
+                |_edge: &Edge<String>,
+                 _bounds: Bounds<Pixels>,
+                 _transform: Transform,
+                 _window: &mut Window,
+                 _cx: &mut App| {
+                    div()
+                        .absolute()
+                        .left(relative(0.5))
+                        .top(relative(0.5))
+                        .ml(px(-2.0))
+                        .mt(px(-2.0))
+                        .w(px(4.0))
+                        .h(px(4.0))
+                        .rounded(px(2.0))
+                        .bg(rgb(0x3b82f6))
+                        .into_any_element()
+                },
+            );
+            flow.set_edge_element_renderer(Some(edge_element));
+            let connection_line: ConnectionLineRenderer = std::sync::Arc::new(
+                |props: &ConnectionLineProps,
+                 _bounds: Bounds<Pixels>,
+                 transform: Transform,
+                 _window: &mut Window,
+                 _cx: &mut App| {
+                    let to = transform.apply(XYPosition::new(props.to_x, props.to_y));
+                    let color = if props.connection_status == Some(false) {
+                        rgb(0xef4444)
+                    } else {
+                        rgb(0x3b82f6)
+                    };
+                    div()
+                        .absolute()
+                        .left(px(to.x as f32 - 4.0))
+                        .top(px(to.y as f32 - 4.0))
+                        .w(px(8.0))
+                        .h(px(8.0))
+                        .rounded(px(4.0))
+                        .bg(color)
+                        .into_any_element()
+                },
+            );
+            flow.set_connection_line_renderer(Some(connection_line));
+            let resize_control: ResizeControlRenderer = std::sync::Arc::new(
+                |control: &ResizeControl,
+                 _bounds: Bounds<Pixels>,
+                 _zoom: f64,
+                 _window: &mut Window,
+                 _cx: &mut App| {
+                    let color = if control.kind.is_handle() {
+                        rgb(0x3b82f6)
+                    } else {
+                        rgba(0x3b82f633)
+                    };
+                    div().size_full().bg(color).into_any_element()
+                },
+            );
+            flow.set_node_resizer(Some(
+                NodeResizerProps {
+                    min_width: 60.0,
+                    min_height: 40.0,
+                    ..Default::default()
+                }
+                .with_control_renderer(resize_control),
+            ));
+            flow.set_panels(vec![PanelItem::new(
+                "hint",
+                PanelPosition::TopLeft,
+                std::sync::Arc::new(|_window, _cx| {
+                    div()
+                        .px(px(10.0))
+                        .py(px(6.0))
+                        .rounded_md()
+                        .bg(rgba(0xffffffcc))
+                        .text_size(px(12.0))
+                        .child("拖拽节点 · 滚轮缩放 · 点击手柄连线")
+                        .into_any_element()
+                }),
+            )]);
+
+            let weak_flow = cx.weak_entity();
+            flow.set_node_toolbar(
+                Some(NodeToolbarProps::default()),
+                Some(std::sync::Arc::new(
+                    move |node: &Node<String>, _window: &mut Window, _cx: &mut App| {
+                        let weak_flow = weak_flow.clone();
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .px(px(8.0))
+                            .py(px(4.0))
+                            .rounded(px(6.0))
+                            .bg(rgb(0xffffff))
+                            .border_1()
+                            .border_color(rgb(0xdddddd))
+                            .text_size(px(11.0))
+                            .child(node.id.clone())
+                            .child(
+                                div()
+                                    .id(format!("gallery-toolbar-clear-{}", node.id))
+                                    .px(px(4.0))
+                                    .cursor_pointer()
+                                    .child("✕")
+                                    .on_click(move |_, _, cx| {
+                                        if let Some(flow) = weak_flow.upgrade() {
+                                            flow.update(cx, |flow, cx| {
+                                                flow.store_mut().unselect_nodes_and_edges();
+                                                cx.notify();
+                                            });
+                                        }
+                                    }),
+                            )
+                            .into_any_element()
+                    },
+                )),
+            );
             flow
         });
-        Gallery {
-            flow,
-            zoom_label: SharedString::from("100%"),
-        }
-    }
-
-    fn sync_zoom(&mut self, cx: &mut App) {
-        let zoom = cx.read_entity(&self.flow, |flow: &Flow, _| flow.store().get_zoom());
-        self.zoom_label = SharedString::from(format!("{}%", (zoom * 100.0).round() as i64));
+        Gallery { flow }
     }
 }
 
 impl Render for Gallery {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let flow = self.flow.clone();
-        let zoom_label = self.zoom_label.clone();
-        let entity = cx.entity().clone();
-        let controls = ControlsProps::default();
 
-        div()
-            .size_full()
-            .relative()
-            .child(flow.clone())
-            .child(
-                div()
-                    .absolute()
-                    .top(px(12.0))
-                    .left(px(12.0))
-                    .flex()
-                    .gap(px(6.0))
-                    .child(
-                        div()
-                            .px(px(10.0))
-                            .py(px(6.0))
-                            .rounded(px(6.0))
-                            .bg(rgb(0xffffff))
-                            .text_size(px(12.0))
-                            .text_color(rgb(0x333333))
-                            .child(zoom_label),
-                    )
-                    .child(
-                        div()
-                            .px(px(10.0))
-                            .py(px(6.0))
-                            .rounded(px(6.0))
-                            .bg(rgb(0xffffff))
-                            .text_size(px(12.0))
-                            .text_color(rgb(0x333333))
-                            .child("drag nodes, scroll to zoom, drag pane to pan"),
-                    ),
-            )
-            .child(
-                div()
-                    .absolute()
-                    .bottom(px(12.0))
-                    .left(px(12.0))
-                    .flex()
-                    .gap(px(6.0))
-                    .children(controls.buttons().into_iter().map(|button| {
-                        let flow = flow.clone();
-                        let entity = entity.clone();
-                        div()
-                            .w(px(controls.button_size))
-                            .h(px(controls.button_size))
-                            .rounded(px(4.0))
-                            .bg(rgb(0xfefefe))
-                            .border_1()
-                            .border_color(rgb(0xeeeeee))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .text_size(px(13.0))
-                            .text_color(rgb(0x333333))
-                            .cursor_pointer()
-                            .child(button.label())
-                            .on_mouse_down(MouseButton::Left, move |_event, _window, cx| {
-                                match button {
-                                    ControlButton::ZoomIn => {
-                                        flow.update(cx, |flow, _| flow.store_mut().zoom_in());
-                                    }
-                                    ControlButton::ZoomOut => {
-                                        flow.update(cx, |flow, _| flow.store_mut().zoom_out());
-                                    }
-                                    ControlButton::FitView => {
-                                        flow.update(cx, |flow, _| {
-                                            flow.store_mut().set_size(1200.0, 800.0);
-                                            flow.store_mut().fit_view();
-                                        });
-                                    }
-                                    ControlButton::Interactive => {}
-                                }
-                                entity.update(cx, |this, cx| {
-                                    this.sync_zoom(cx);
-                                    cx.notify();
-                                });
-                            })
-                    })),
-            )
+        div().size_full().relative().child(flow).child(
+            div()
+                .absolute()
+                .top(px(12.0))
+                .left(px(12.0))
+                .px(px(10.0))
+                .py(px(6.0))
+                .rounded(px(6.0))
+                .bg(rgb(0xffffff))
+                .text_size(px(12.0))
+                .text_color(rgb(0x333333))
+                .child("drag nodes, scroll to zoom, drag pane to pan, Del deletes selection"),
+        )
     }
 }
 
@@ -274,6 +349,7 @@ fn gallery_edges() -> Vec<Edge<String>> {
         source: "step".to_string(),
         target: "smooth".to_string(),
         edge_type: Some("smoothstep".to_string()),
+        animated: true,
         marker_end: marker(),
         label: Some("smoothstep".to_string()),
         ..Edge::default()

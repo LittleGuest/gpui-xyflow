@@ -10,9 +10,11 @@ use crate::core::{
 pub type NodeChangeHandler<S> = Arc<dyn Fn(&[NodeChange<S>]) + Send + Sync>;
 pub type EdgeChangeHandler<S> = Arc<dyn Fn(&[EdgeChange<S>]) + Send + Sync>;
 pub type NodesHandler<S> = Arc<dyn Fn(&[Node<S>]) + Send + Sync>;
+pub type NodeHandler<S> = Arc<dyn Fn(&Node<S>) + Send + Sync>;
 pub type EdgeHandler<S> = Arc<dyn Fn(&Edge<S>) + Send + Sync>;
 pub type EdgesHandler<S> = Arc<dyn Fn(&[Edge<S>]) + Send + Sync>;
 pub type ConnectHandler<S> = Arc<dyn Fn(&ConnectionInProgress<S>) + Send + Sync>;
+pub type ValidConnectionHandler = Arc<dyn Fn(&crate::core::edge::Connection) -> bool + Send + Sync>;
 pub type DeleteHandler<S> = Arc<dyn Fn(&[Node<S>], &[Edge<S>]) + Send + Sync>;
 pub type ViewportHandler = Arc<dyn Fn(crate::core::geometry::Viewport) + Send + Sync>;
 pub type TransformHandler = Arc<dyn Fn(crate::core::geometry::Transform) + Send + Sync>;
@@ -79,6 +81,13 @@ callback_table!(
     on_nodes_delete: NodesHandler<S>,
     on_edges_delete: EdgesHandler<S>,
     on_delete: DeleteHandler<S>,
+    is_valid_connection: ValidConnectionHandler,
+    on_node_click: NodeHandler<S>,
+    on_node_double_click: NodeHandler<S>,
+    on_node_context_menu: NodeHandler<S>,
+    on_node_mouse_enter: NodeHandler<S>,
+    on_node_mouse_move: NodeHandler<S>,
+    on_node_mouse_leave: NodeHandler<S>,
     on_edge_click: EdgeHandler<S>,
     on_edge_double_click: EdgeHandler<S>,
     on_edge_context_menu: EdgeHandler<S>,

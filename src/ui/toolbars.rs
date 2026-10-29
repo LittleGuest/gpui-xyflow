@@ -1,12 +1,50 @@
+use std::sync::Arc;
+
+use gpui_kit::{AnyElement, App, Window};
+
 use crate::core::{
     edge::Edge,
     geometry::{Alignment, Position, Rect, Viewport},
     graph::get_internal_nodes_bounds,
-    node::{InternalNode, NodeLookup},
+    node::{InternalNode, Node, NodeLookup},
     utils_extra::{
         ToolbarAlignX, ToolbarAlignY, get_edge_toolbar_transform, get_node_toolbar_transform,
     },
 };
+
+/// Builds the interactive content rendered inside a [`NodeToolbarProps`] overlay.
+pub type NodeToolbarContent =
+    Arc<dyn Fn(&Node<String>, &mut Window, &mut App) -> AnyElement + Send + Sync>;
+
+/// Builds the interactive content rendered inside an [`EdgeToolbarProps`] overlay.
+pub type EdgeToolbarContent =
+    Arc<dyn Fn(&Edge<String>, &mut Window, &mut App) -> AnyElement + Send + Sync>;
+
+/// Resolves which nodes a node toolbar should be attached to.
+///
+/// Explicit `node_ids` win; otherwise the current selection is used. When `is_visible` is unset,
+/// only selected nodes are shown, matching React Flow's default behaviour.
+pub fn node_toolbar_targets<S: Clone>(
+    props: &NodeToolbarProps,
+    node_lookup: &NodeLookup<S>,
+    selected_node_ids: &[String],
+) -> Vec<String> {
+    let requested = if props.node_ids.is_empty() {
+        selected_node_ids.to_vec()
+    } else {
+        props.node_ids.clone()
+    };
+
+    requested
+        .into_iter()
+        .filter(|id| {
+            node_lookup
+                .get(id)
+                .map(|node| props.is_visible.unwrap_or(node.selected))
+                .unwrap_or(false)
+        })
+        .collect()
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct NodeToolbarProps {

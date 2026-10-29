@@ -134,6 +134,7 @@ pub struct FlowProps<S = String> {
     pub auto_pan_on_node_focus: bool,
     pub auto_pan_speed: f64,
     pub lib: String,
+    pub hide_attribution: bool,
     pub debug: bool,
     pub auto_pan_on_drag: bool,
     pub selection_key_code: Option<String>,
@@ -212,6 +213,7 @@ impl<S> Default for FlowProps<S> {
             auto_pan_on_node_focus: false,
             auto_pan_speed: 15.0,
             lib: "gpui".to_string(),
+            hide_attribution: false,
             debug: false,
             auto_pan_on_drag: true,
             selection_key_code: Some("Shift".to_string()),
@@ -708,6 +710,29 @@ impl<S: Clone + PartialEq> FlowStore<S> {
         }
     }
 
+    pub fn set_node_selected(&mut self, id: &str, selected: bool) {
+        if let Some(node) = self.node_lookup.get_mut(id) {
+            node.selected = selected;
+            node.internals.user_node.selected = selected;
+        }
+        for node in self.nodes.iter_mut() {
+            if node.id == id {
+                node.selected = selected;
+            }
+        }
+    }
+
+    pub fn set_edge_selected(&mut self, id: &str, selected: bool) {
+        if let Some(edge) = self.edge_lookup.get_mut(id) {
+            edge.selected = selected;
+        }
+        for edge in self.edges.iter_mut() {
+            if edge.id == id {
+                edge.selected = selected;
+            }
+        }
+    }
+
     pub fn selected_node_ids(&self) -> Vec<String> {
         self.node_lookup
             .values()
@@ -978,15 +1003,44 @@ impl<S: Clone + PartialEq> FlowStore<S> {
     }
 
     pub fn fit_bounds(&mut self, bounds: Rect, padding: f64) {
+        self.fit_bounds_with(bounds, padding, self.props.min_zoom, self.props.max_zoom);
+    }
+
+    pub fn fit_bounds_with(&mut self, bounds: Rect, padding: f64, min_zoom: f64, max_zoom: f64) {
         let viewport = get_viewport_for_bounds(
             bounds,
             self.size.width,
             self.size.height,
-            self.props.min_zoom,
-            self.props.max_zoom,
+            min_zoom,
+            max_zoom,
             Padding::all(padding),
         );
         self.set_viewport(viewport);
+    }
+
+    /// Bounds of all nodes, optionally including hidden ones.
+    pub fn bounds_including_hidden(&self, include_hidden: bool) -> Rect {
+        if !include_hidden {
+            return self.tight_bounds();
+        }
+        let rects: Vec<Rect> = self
+            .node_lookup
+            .values()
+            .map(|node| {
+                let dimensions = node.size();
+                Rect::new(
+                    node.internals.position_absolute.x,
+                    node.internals.position_absolute.y,
+                    dimensions.width,
+                    dimensions.height,
+                )
+            })
+            .collect();
+        if rects.is_empty() {
+            Rect::new(0.0, 0.0, 0.0, 0.0)
+        } else {
+            crate::core::utils::get_bounds_of_rect_slice(&rects)
+        }
     }
 
     pub fn fit_view(&mut self) {

@@ -1,3 +1,7 @@
+use std::sync::Arc;
+
+use gpui_kit::{AnyElement, App, Bounds, Pixels, Window};
+
 use crate::{
     core::{
         geometry::{Rect, XYPosition},
@@ -9,6 +13,187 @@ use crate::{
     },
     ui::theme::FlowTheme,
 };
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NodeResizeInfo {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+pub type NodeResizeHandler = Arc<dyn Fn(&str, NodeResizeInfo) + Send + Sync>;
+
+#[derive(Clone, Default)]
+pub struct NodeResizerCallbacks {
+    pub on_resize_start: Option<NodeResizeHandler>,
+    pub on_resize: Option<NodeResizeHandler>,
+    pub on_resize_end: Option<NodeResizeHandler>,
+}
+
+impl std::fmt::Debug for NodeResizerCallbacks {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NodeResizerCallbacks")
+            .finish_non_exhaustive()
+    }
+}
+
+impl PartialEq for NodeResizerCallbacks {
+    fn eq(&self, other: &Self) -> bool {
+        fn same(left: &Option<NodeResizeHandler>, right: &Option<NodeResizeHandler>) -> bool {
+            match (left, right) {
+                (None, None) => true,
+                (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+                _ => false,
+            }
+        }
+        same(&self.on_resize_start, &other.on_resize_start)
+            && same(&self.on_resize, &other.on_resize)
+            && same(&self.on_resize_end, &other.on_resize_end)
+    }
+}
+
+/// Builds a real GPUI element rendered on top of one resize control.
+///
+/// 控制点元素只负责外观；缩放交互仍由画布命中测试驱动。
+pub type ResizeControlRenderer = Arc<
+    dyn Fn(&ResizeControl, Bounds<Pixels>, f64, &mut Window, &mut App) -> AnyElement + Send + Sync,
+>;
+
+#[derive(Clone)]
+pub struct NodeResizerProps {
+    pub node_ids: Vec<String>,
+    pub is_visible: Option<bool>,
+    pub min_width: f64,
+    pub min_height: f64,
+    pub max_width: f64,
+    pub max_height: f64,
+    pub keep_aspect_ratio: bool,
+    pub handle_size: f64,
+    pub line_width: f64,
+    pub color: Option<gpui_kit::Rgba>,
+    pub callbacks: NodeResizerCallbacks,
+    pub control_renderer: Option<ResizeControlRenderer>,
+}
+
+impl std::fmt::Debug for NodeResizerProps {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NodeResizerProps")
+            .field("node_ids", &self.node_ids)
+            .field("is_visible", &self.is_visible)
+            .field("min_width", &self.min_width)
+            .field("min_height", &self.min_height)
+            .field("max_width", &self.max_width)
+            .field("max_height", &self.max_height)
+            .field("keep_aspect_ratio", &self.keep_aspect_ratio)
+            .field("handle_size", &self.handle_size)
+            .field("line_width", &self.line_width)
+            .field("color", &self.color)
+            .field("callbacks", &self.callbacks)
+            .field("control_renderer", &self.control_renderer.is_some())
+            .finish()
+    }
+}
+
+impl PartialEq for NodeResizerProps {
+    fn eq(&self, other: &Self) -> bool {
+        let same_renderer = match (&self.control_renderer, &other.control_renderer) {
+            (None, None) => true,
+            (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+            _ => false,
+        };
+        self.node_ids == other.node_ids
+            && self.is_visible == other.is_visible
+            && self.min_width == other.min_width
+            && self.min_height == other.min_height
+            && self.max_width == other.max_width
+            && self.max_height == other.max_height
+            && self.keep_aspect_ratio == other.keep_aspect_ratio
+            && self.handle_size == other.handle_size
+            && self.line_width == other.line_width
+            && self.color == other.color
+            && self.callbacks == other.callbacks
+            && same_renderer
+    }
+}
+
+impl Default for NodeResizerProps {
+    fn default() -> Self {
+        NodeResizerProps {
+            node_ids: Vec::new(),
+            is_visible: None,
+            min_width: 10.0,
+            min_height: 10.0,
+            max_width: f64::MAX,
+            max_height: f64::MAX,
+            keep_aspect_ratio: false,
+            handle_size: 10.0,
+            line_width: 4.0,
+            color: None,
+            callbacks: NodeResizerCallbacks::default(),
+            control_renderer: None,
+        }
+    }
+}
+
+impl NodeResizerProps {
+    pub fn with_node_ids(mut self, node_ids: Vec<String>) -> Self {
+        self.node_ids = node_ids;
+        self
+    }
+
+    pub fn with_visibility(mut self, visible: Option<bool>) -> Self {
+        self.is_visible = visible;
+        self
+    }
+
+    pub fn with_min_size(mut self, width: f64, height: f64) -> Self {
+        self.min_width = width;
+        self.min_height = height;
+        self
+    }
+
+    pub fn with_max_size(mut self, width: f64, height: f64) -> Self {
+        self.max_width = width;
+        self.max_height = height;
+        self
+    }
+
+    pub fn with_keep_aspect_ratio(mut self, keep: bool) -> Self {
+        self.keep_aspect_ratio = keep;
+        self
+    }
+
+    pub fn with_color(mut self, color: gpui_kit::Rgba) -> Self {
+        self.color = Some(color);
+        self
+    }
+
+    pub fn with_control_renderer(mut self, renderer: ResizeControlRenderer) -> Self {
+        self.control_renderer = Some(renderer);
+        self
+    }
+
+    pub fn boundaries(&self) -> Boundaries {
+        Boundaries::new(
+            self.min_width,
+            self.min_height,
+            self.max_width,
+            self.max_height,
+        )
+    }
+}
+
+impl NodeResizeInfo {
+    pub fn from_rect(rect: Rect) -> NodeResizeInfo {
+        NodeResizeInfo {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ResizeHandleKind {
